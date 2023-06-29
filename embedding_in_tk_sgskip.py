@@ -55,6 +55,14 @@ def button_handler(e):
 
 canvas.mpl_connect("button_press_event", button_handler)
 
+var_mouse = tkinter.StringVar(master=root, value='Current coordinates')
+label_mouse = tkinter.Label(master=root, textvariable=var_mouse)
+
+def hover_handler(e):
+    var_mouse.set(f'{e.xdata},{e.ydata}')
+
+canvas.mpl_connect("motion_notify_event", hover_handler)
+
 def zoom_in():
     limits = ax.axis()
     zoom_factor = 0.75
@@ -78,6 +86,7 @@ button_quit = tkinter.Button(master=root, text="Quit", command=root.destroy)
 # sure the UI controls are displayed as long as possible.
 button_quit.pack(side=tkinter.BOTTOM)
 #toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+label_mouse.pack(side=tkinter.TOP)
 button_zoom.pack(side=tkinter.RIGHT)
 canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
 
