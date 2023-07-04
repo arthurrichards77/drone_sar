@@ -1,11 +1,3 @@
-"""
-===============
-Embedding in Tk
-===============
-
-"""
-import os
-
 import tkinter
 
 import rasterio
@@ -17,9 +9,8 @@ from matplotlib.figure import Figure
 
 import numpy as np
 
-
 root = tkinter.Tk()
-root.wm_title("Embedding in Tk")
+root.wm_title("Map view")
 
 fig = Figure(figsize=(5, 4), dpi=100)
 ax = fig.add_subplot()
@@ -78,7 +69,6 @@ def zoom_in():
 button_zoom = tkinter.Button(master=root, text="Zoom In", command=zoom_in)
 
 button_quit = tkinter.Button(master=root, text="Quit", command=root.destroy)
-
 
 # Packing order is important. Widgets are processed sequentially and if there
 # is no space left, because the window is too small, they are not displayed.
