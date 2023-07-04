@@ -114,6 +114,17 @@ def pan_right():
     ax.axis([xmin,xmax,limits[2],limits[3]])
     canvas.draw()
 
+def pan_left():
+    limits = ax.axis()
+    pan_factor = 0.3
+    xmin = limits[0] - int(pan_factor*(limits[1] - limits[0]))
+    xmax = limits[1] - int(pan_factor*(limits[1] - limits[0]))
+    if xmin < tile_limits[0]:
+        xmax = tile_limits[0] + (xmax-xmin)
+        xmin = tile_limits[0]
+    ax.axis([xmin,xmax,limits[2],limits[3]])
+    canvas.draw()
+
 def zoom_reset():
     ax.axis(tile_limits)
     canvas.draw()
@@ -128,6 +139,9 @@ button_zoom_reset.grid(column=1,row=1)
 
 button_pan_right = tkinter.Button(master=frame_zoom, text="Pan right", command=pan_right)
 button_pan_right.grid(column=2,row=1)
+
+button_pan_left = tkinter.Button(master=frame_zoom, text="Pan left", command=pan_left)
+button_pan_left.grid(column=0,row=1)
 
 button_quit = tkinter.Button(master=root, text="Quit", command=root.destroy)
 
