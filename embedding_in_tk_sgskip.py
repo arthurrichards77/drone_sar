@@ -9,42 +9,71 @@ from matplotlib.figure import Figure
 
 import numpy as np
 
+from pymavlink import mavutil
+
+import pyproj
+
+crs_osgb = pyproj.CRS.from_epsg(27700)
+lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_osgb.geodetic_crs, crs_osgb)
+
+drone_track = []
+poi_list = []
+
 root = tkinter.Tk()
 root.wm_title("Map view")
 
 fig = Figure(figsize=(5, 4), dpi=100)
 ax = fig.add_subplot()
 
-track = []
+drone_line, = ax.plot([p[0] for p in drone_track],[p[1] for p in drone_track],'g-')
+drone_marker, = ax.plot([],[],'gx')
+poi_line, = ax.plot([p[0] for p in poi_list],[p[1] for p in poi_list],'b^')
 
-#tiles_path = 'Download_2292886/raster-25k_5099296/sh'
-#data_files = os.listdir(tiles_path)
-#map_files = [f for f in data_files if f.endswith('.tif')]
-#base_maps = [rasterio.open(tiles_path + '/' + f) for f in map_files]
-#for m in base_maps:
-#    show(m, ax=ax, cmap='Blues')
+
+connect_str = 'tcp:localhost:5762'
+mav_connection = mavutil.mavlink_connection(connect_str)
+print(f'Connected to {connect_str}')
+
+num_loops = 0
+def timer_loop():
+    global num_loops
+    num_loops += 1
+    """Process the next waiting MAVLINK message and repeat after 1ms.
+    Calling this starts a new timed thread alongside GUI actions."""
+    msg = mav_connection.recv_match(type=['HEARTBEAT',
+                                          'GLOBAL_POSITION_INT'
+                                               ], blocking=False)
+    print(num_loops)
+    if num_loops>1000:
+        if msg:
+            mav_connection.mav.request_data_stream_send(msg.get_srcSystem(),
+                                                        msg.get_srcComponent(),
+                                                        mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
+            if msg.get_type()=='GLOBAL_POSITION_INT':
+                x,y = lat_lon_to_east_north.transform(msg.lat/1e7, msg.lon/1e7)
+                print(msg.lat/1e7,msg.lon/1e7)
+                print(x,y)
+                drone_track.append((x,y))
+                drone_line.set_data([p[0] for p in drone_track],[p[1] for p in drone_track])
+                drone_marker.set_data(x,y)
+                canvas.draw()
+                num_loops = 0
+    root.after(1, timer_loop)
 
 base_map = rasterio.open('llanbedr_rgb.tif')
 show(base_map, ax=ax)
 
-limits = ax.axis()
-print(limits)
-
-line, = ax.plot([p[0] for p in track],[p[1] for p in track],'gx-')
+tile_limits = ax.axis()
 
 canvas = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
 canvas.draw()
 
-# pack_toolbar=False will make it easier to use a layout manager later on.
-#toolbar = NavigationToolbar2Tk(canvas, root, pack_toolbar=False)
-#toolbar.update()
-
-def button_handler(e):
-    track.append((e.xdata, e.ydata))
-    line.set_data([p[0] for p in track],[p[1] for p in track])
+def click_handler(e):
+    poi_list.append((e.xdata, e.ydata))
+    poi_line.set_data([p[0] for p in poi_list],[p[1] for p in poi_list])
     canvas.draw()
 
-canvas.mpl_connect("button_press_event", button_handler)
+canvas.mpl_connect("button_press_event", click_handler)
 
 var_mouse = tkinter.StringVar(master=root, value='Current coordinates')
 label_mouse = tkinter.Label(master=root, textvariable=var_mouse)
@@ -80,4 +109,5 @@ label_mouse.pack(side=tkinter.TOP)
 button_zoom.pack(side=tkinter.RIGHT)
 canvas.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
 
+timer_loop()
 tkinter.mainloop()
