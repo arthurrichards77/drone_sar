@@ -10,8 +10,11 @@ import pyproj
 
 import argparse
 
+from math import sqrt
+
 crs_osgb = pyproj.CRS.from_epsg(27700)
 lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_osgb.geodetic_crs, crs_osgb)
+east_north_to_lat_lon = pyproj.Transformer.from_crs(crs_osgb, crs_osgb.geodetic_crs)
 
 class MapTrack:
 
@@ -49,6 +52,9 @@ class TkTrackerMap(FigureCanvasTkAgg):
         self.tracks.append(new_track)
         return new_track
     
+def distance(x1,y1,x2,y2):
+    return sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
+
 class TrackerApp:
 
     def __init__(self, tile_file_name, mav_connect_str):
@@ -61,11 +67,16 @@ class TrackerApp:
         self.click_mode = None
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
         track_toolbar = self.build_track_toolbar()
+        # display coordinates etc
+        self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
+        status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3)
+        self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
         # include built-in toolbar for map zoom and pan etc
         self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
         self.nav_toolbar.update()
         # assemble the GUI
         self.nav_toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        status_label.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         track_toolbar.pack(side=tkinter.TOP)
         self.tracker_map.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
 
@@ -96,7 +107,16 @@ class TrackerApp:
         misper_button.grid(row=0,column=1)
         poi_button = tkinter.Button(master=toolbar_frame, text='POI', command=lambda: self.set_click_mode('POI'))
         poi_button.grid(row=0,column=2)
+        fly_button = tkinter.Button(master=toolbar_frame, text='FLY', command=lambda: self.set_click_mode('FLY'))
+        fly_button.grid(row=0,column=3)
         return toolbar_frame
+    
+    def hover_handler(self, e):
+        if e.xdata:
+            lat, lon = east_north_to_lat_lon.transform(e.xdata, e.ydata)
+            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f}''')
+        else:
+            self.status_msgs.set('')
 
     def run(self):
         self.root.mainloop()
