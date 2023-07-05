@@ -1,6 +1,9 @@
 from flask import Flask, render_template, request
+from datetime import datetime
 
 app = Flask(__name__)
+
+msgs = []
 
 @app.route("/hello/")
 def hello_world():
@@ -27,15 +30,22 @@ def post_test():
 @app.route("/post_result/", methods=['GET', 'POST'])
 def post_result():
     name = request.form['name']
-    print(name)
     return render_template('post_test.html',name=name)
 
 @app.route("/")
 @app.route("/chat/", methods=['GET', 'POST'])
 def chat():
     if request.method=='POST':
-        name = request.form['name']
-        return render_template('chat.html', name=name)
+        sender_name = request.form['name']
+        msg_time = datetime.now()
+        msgs.append({'name': sender_name,
+                     'time': msg_time.isoformat(),
+                     'msg': request.form['lat'],
+                     'lat': request.form['lat'],
+                     'lon': request.form['lon'],
+                     })
+        print(msgs)
+        return render_template('chat.html', name=sender_name)
     else:
         return render_template('chat.html', name=None)
 
