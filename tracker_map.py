@@ -110,6 +110,10 @@ class TrackerToolbar(tkinter.Frame):
                                              text='CAN',
                                              command=parent_app.cancel_fly_to)
         self.buttons['CAN'].grid(row=0,column=4)
+        self.buttons['BRK'] = tkinter.Button(master=self,
+                                             text='BRK',
+                                             command=parent_app.brake)
+        self.buttons['BRK'].grid(row=0,column=5)
 
 def distance(p1,p2):
     x1,y1 = p1
@@ -189,6 +193,9 @@ class TrackerApp:
     def cancel_fly_to(self):
         self.fly_target = None
         self.tracks['TARGET'].wipe()
+
+    def brake(self):
+        self.mav.set_mode(17)
 
     def send_fly_target(self):
         if self.fly_target:
