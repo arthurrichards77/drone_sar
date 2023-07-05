@@ -186,13 +186,10 @@ class TrackerApp:
         self.tracks[new_poi] = self.tracker_map.add_track(new_poi, head_style='b^')
         self.tracks[new_poi].update(x,y)
 
-    def fly_to(self,x,y):
-        print(f'Fly to {x},{y}')
+    def fly_to(self,x,y,yaw_rate=0.0):
         lat, lon = east_north_to_lat_lon.transform(x,y)
-        print(f'That is {lat}, {lon}')
-        if self.mav:
-            self.fly_target = (lat,lon)
-            self.tracks['TARGET'].update_latlon(lat,lon)
+        self.fly_target = (lat,lon,yaw_rate)
+        self.tracks['TARGET'].update_latlon(lat,lon)
 
     def cancel_fly_to(self):
         self.fly_target = None
@@ -203,13 +200,10 @@ class TrackerApp:
             self.mav.set_mode(17)
 
     def circle(self):
-        if self.mav:
-            self.mav.set_mode(7)
-            rc_channel_values = [65535 for _ in range(18)]
-            rc_channel_values[3] = 1500
-            self.mav.mav.rc_channels_override_send(1,
-                                                   1,
-                                                   *rc_channel_values)
+        pos = self.tracks['DRONE'].get_current_pos()
+        if pos:
+            self.fly_to(pos[0], pos[1], 0.5)
+
 
     def send_fly_target(self):
         if self.fly_target:
@@ -223,13 +217,11 @@ class TrackerApp:
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE, # |
-                # mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
-                # mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                # mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE,
                 int(self.fly_target[0] * 1.0e7),  # lat
                 int(self.fly_target[1] * 1.0e7),  # lon
-                10,  # alt
+                20,  # alt
                 0,  # vx
                 0,  # vy
                 0,  # vz
@@ -237,7 +229,7 @@ class TrackerApp:
                 0,  # afy
                 0,  # afz
                 0,  # yaw
-                0,  # yawrate
+                self.fly_target[2],  # yawrate
             )
 
     def click_handler(self,e):
@@ -326,7 +318,8 @@ class TrackerApp:
         # redraw the canvas every second
         self.tracker_map.draw()
         # update target if there is one
-        self.send_fly_target()
+        if self.mav:
+            self.send_fly_target()
         self.root.after(500, self.slow_loop)
 
     def run(self):
