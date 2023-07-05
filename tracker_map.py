@@ -279,9 +279,18 @@ class TrackerApp:
                     # seen this drone before
                     if msg.get_type()=='GLOBAL_POSITION_INT':
                         self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
+                        sensor_offset = 10*(msg.relative_alt/1.0e3)
+                        drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
+                        sensor_x = drone_x + sensor_offset*sin(msg.hdg*1.0e-2*2*pi/360.0)
+                        sensor_y = drone_y + sensor_offset*cos(msg.hdg*1.0e-2*2*pi/360.0)
+                        self.tracks['SENSOR'].update(sensor_x,sensor_y)
                 else:
                     # not seen drone before
                     self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
+                    self.tracks['SENSOR'] = self.tracker_map.add_track('Sensor',head_style='-',track_style='g-')
+                    self.tracks['SENSOR'].track_line.set_lw(10)
+                    self.tracks['SENSOR'].track_line.set_c((0.,1.,0.,0.5))
+                    # request data
                     self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
                                                         msg.get_srcComponent(),
                                                         mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
