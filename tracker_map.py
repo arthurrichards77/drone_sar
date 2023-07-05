@@ -135,7 +135,7 @@ class TrackerApp:
         self.tracks['PILOT'] = self.tracker_map.add_track('PILOT', track_type=RingedTrack)
         self.tracks['PILOT'].add_ring(500,'r--')
         # click event handler and toolbar work together
-        self.click_mode = None
+        self.click_mode = 'NAV'
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
         self.track_toolbar = TrackerToolbar(self.root, self)
         # display coordinates etc
@@ -237,7 +237,7 @@ class TrackerApp:
                 pos = self.tracks[t].get_current_pos()
                 if pos:
                     dist_msg += f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; '
-            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f}
+            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f}  Mode {self.click_mode}
                                  {dist_msg}''')
         else:
             self.status_msgs.set('')
