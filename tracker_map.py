@@ -18,6 +18,7 @@ from pymavlink import mavutil
 
 import requests
 import json
+import warnings
 
 crs_osgb = pyproj.CRS.from_epsg(27700)
 lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_osgb.geodetic_crs, crs_osgb)
@@ -70,13 +71,14 @@ class RingedTrack(MapTrack):
 
     def plot(self):
         super().plot()
-        angles = [2*pi*kk/100 for kk in range(100)] + [0]
-        num_rings = len(self.radii)
-        for ii in range(num_rings):
-            ctr_x, ctr_y = self.get_current_pos()
-            ring_x = [ctr_x + self.radii[ii]*cos(a) for a in angles]
-            ring_y = [ctr_y + self.radii[ii]*sin(a) for a in angles]
-            self.ring_lines[ii].set_data(ring_x, ring_y)
+        if self.track_points:
+            angles = [2*pi*kk/100 for kk in range(100)] + [0]
+            num_rings = len(self.radii)
+            for ii in range(num_rings):
+                ctr_x, ctr_y = self.get_current_pos()
+                ring_x = [ctr_x + self.radii[ii]*cos(a) for a in angles]
+                ring_y = [ctr_y + self.radii[ii]*sin(a) for a in angles]
+                self.ring_lines[ii].set_data(ring_x, ring_y)
 
 class TkTrackerMap(FigureCanvasTkAgg):
 
@@ -122,12 +124,16 @@ class TrackerApp:
         self.root.wm_title("Tracker Map")
         self.tracker_map = TkTrackerMap(self.root, tile_file_name)
         self.tracks = {}
+        # special high level track for MISPER
         self.tracks['MISPER'] = self.tracker_map.add_track('MISPER', track_type=RingedTrack)
         self.tracks['MISPER'].add_ring(350,'g-')
         self.tracks['MISPER'].add_ring(550,'m-')
         self.tracks['MISPER'].add_ring(1100,'b-')
         self.tracks['MISPER'].add_ring(1300,'y-')
         self.tracks['MISPER'].add_ring(1800,'k-')
+        # another one for the pilot
+        self.tracks['PILOT'] = self.tracker_map.add_track('PILOT', track_type=RingedTrack)
+        self.tracks['PILOT'].add_ring(500,'r--')
         # click event handler and toolbar work together
         self.click_mode = None
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
@@ -247,12 +253,17 @@ class TrackerApp:
 
     def process_chat(self):
         if self.chat_url:
-            chat_inbox_req = requests.get(self.chat_url, verify=False, timeout=0.5)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                chat_inbox_req = requests.get(self.chat_url, verify=False, timeout=0.5)
             chat_inbox = json.loads(chat_inbox_req.content)
             for chat_item in chat_inbox:
                 if chat_item['lat']:
                     chat_name = chat_item['name']
-                    if chat_name in self.tracks.keys():
+                    if chat_name.upper()=='PILOT':
+                        self.tracks['PILOT'].wipe()
+                        self.tracks['PILOT'].update_latlon(chat_item['lat'], chat_item['lon'])
+                    elif chat_name in self.tracks.keys():
                         self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
                     else:
                         self.tracks[chat_name] = self.tracker_map.add_track(chat_name, head_style='m^')
