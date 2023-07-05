@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request
 from datetime import datetime
+import json
 
 app = Flask(__name__)
 
@@ -40,7 +41,7 @@ def chat():
         msg_time = datetime.now()
         msgs.append({'name': sender_name,
                      'time': msg_time.isoformat(),
-                     'msg': request.form['lat'],
+                     'msg': request.form['msg'],
                      'lat': request.form['lat'],
                      'lon': request.form['lon'],
                      })
@@ -49,3 +50,14 @@ def chat():
     else:
         return render_template('chat.html', name=None)
 
+@app.route("/monitor/")
+def monitor():
+    return json.dumps(msgs)
+
+@app.route("/inbox/")
+def inbox():
+    received_msgs = []
+    num_msgs = len(msgs)
+    for ii in range(num_msgs):
+        received_msgs.append(msgs.pop(0))
+    return json.dumps(received_msgs)
