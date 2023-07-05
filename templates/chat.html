@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<p>Enter some text in the fields below, then press the "Submit form" button to submit the form.</p>
+
+<form id="chat_form" action="/chat" method="post">
+    {% if name %}
+    Name: <input type="text" name="name" value="{{ name }}"><br>
+    {% else %}
+    Name: <input type="text" name="name"><br>
+    {% endif %}
+    Message: <input type="text" name="msg"><br>
+    Latitude: <input type="text" name="lat"><br>
+    Longitude: <input type="text" name="lon"><br>
+  <input type="button" onclick="submit_function()" value="Submit form">
+</form>
+
+<script>
+function submit_function() {
+  document.getElementById("chat_form").submit();
+}
+</script>
+
+</body>
+</html>

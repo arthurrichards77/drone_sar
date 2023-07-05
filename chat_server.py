@@ -30,3 +30,12 @@ def post_result():
     print(name)
     return render_template('post_test.html',name=name)
 
+@app.route("/")
+@app.route("/chat/", methods=['GET', 'POST'])
+def chat():
+    if request.method=='POST':
+        name = request.form['name']
+        return render_template('chat.html', name=name)
+    else:
+        return render_template('chat.html', name=None)
+
