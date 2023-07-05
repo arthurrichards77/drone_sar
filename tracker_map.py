@@ -81,7 +81,7 @@ class TrackerApp:
     def __init__(self, tile_file_name, mav_connect_str):
         self.root = tkinter.Tk()
         self.root.wm_title("Tracker Map")
-        self.tracker_map = TkTrackerMap(self.root, 'llanbedr_rgb.tif')
+        self.tracker_map = TkTrackerMap(self.root, tile_file_name)
         self.tracks = {}
         self.tracks['MISPER'] = self.tracker_map.add_track('MISPER')
         # click event handler and toolbar work together
