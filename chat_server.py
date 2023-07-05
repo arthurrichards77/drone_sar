@@ -20,3 +20,13 @@ def result_test():
     print(name)
     return render_template('form_test.html',name=name)
 
+@app.route("/post_test/")
+def post_test():
+    return render_template('post_test.html',name=None)
+
+@app.route("/post_result/", methods=['GET', 'POST'])
+def post_result():
+    name = request.form['name']
+    print(name)
+    return render_template('post_test.html',name=name)
+

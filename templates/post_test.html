@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+{% if name %}
+<h1>Hello {{ name }}!</h1>
+{% else %}
+<h1>Hello, World!</h1>
+{% endif %}
+
+<p>Enter some text in the fields below, then press the "Submit form" button to submit the form.</p>
+
+<form id="myForm" action="/post_result" method="post">
+    {% if name %}
+    Name: <input type="text" name="name" value="{{ name }}"><br>
+    {% else %}
+    Name: <input type="text" name="name"><br>
+    {% endif %}
+  <input type="button" onclick="myFunction()" value="Submit form">
+</form>
+
+<script>
+function myFunction() {
+  document.getElementById("myForm").submit();
+}
+</script>
+
+</body>
+</html>
