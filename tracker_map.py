@@ -286,21 +286,22 @@ class TrackerApp:
                                                         msg.get_srcComponent(),
                                                         mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
 
-    def timer_loop(self):
+    def fast_loop(self):
         self.process_mavlink()
-        self.timer_count += 1
-        if self.timer_count>=1000:
-            # process chat
-            self.process_chat()
-            # redraw the canvas every second
-            self.timer_count = 0
-            self.tracker_map.draw()
-            # update target if there is one
-            self.send_fly_target()
-        self.root.after(1, self.timer_loop)
+        self.root.after(1, self.fast_loop)
+
+    def slow_loop(self):
+        # process chat
+        self.process_chat()
+        # redraw the canvas every second
+        self.tracker_map.draw()
+        # update target if there is one
+        self.send_fly_target()
+        self.root.after(500, self.slow_loop)
 
     def run(self):
-        self.timer_loop()
+        self.slow_loop()
+        self.fast_loop()
         self.root.mainloop()
 
 def main():
