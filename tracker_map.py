@@ -14,6 +14,8 @@ import argparse
 
 from math import sqrt
 
+from pymavlink import mavutil
+
 crs_osgb = pyproj.CRS.from_epsg(27700)
 lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_osgb.geodetic_crs, crs_osgb)
 east_north_to_lat_lon = pyproj.Transformer.from_crs(crs_osgb, crs_osgb.geodetic_crs)
@@ -33,6 +35,12 @@ class MapTrack:
         self.track_line.set_data([p[0] for p in self.track_points],
                                  [p[1] for p in self.track_points])
         
+    def wipe(self):
+        self.track_points.clear()
+        self.head_marker.set_data([],[])
+        self.track_line.set_data([],
+                                 [])
+
     def update_latlon(self,lat,lon):
         x,y = lat_lon_to_east_north.transform(lat, lon)
         self.update(x,y)
@@ -51,11 +59,9 @@ class TkTrackerMap(FigureCanvasTkAgg):
         base_map = rasterio.open(tile_file_name)
         show(base_map, ax=self.ax)
         self.tile_limits = self.ax.axis()
-        self.tracks = []
 
     def add_track(self,name, track_style='-', head_style='x'):
         new_track = MapTrack(name, self, track_style, head_style)
-        self.tracks.append(new_track)
         return new_track
     
 class TrackerToolbar(tkinter.Frame):
@@ -70,6 +76,10 @@ class TrackerToolbar(tkinter.Frame):
                                                text=txt,
                                                command=functools.partial(parent_app.set_click_mode, new_mode=txt))
             self.buttons[txt].grid(row=0,column=ii)
+        self.buttons['CAN'] = tkinter.Button(master=self,
+                                             text='CAN',
+                                             command=parent_app.cancel_fly_to)
+        self.buttons['CAN'].grid(row=0,column=4)
 
 def distance(p1,p2):
     x1,y1 = p1
@@ -80,6 +90,7 @@ class TrackerApp:
 
     def __init__(self, tile_file_name, mav_connect_str):
         self.root = tkinter.Tk()
+        self.timer_count = 0
         self.root.wm_title("Tracker Map")
         self.tracker_map = TkTrackerMap(self.root, tile_file_name)
         self.tracks = {}
@@ -100,6 +111,10 @@ class TrackerApp:
         status_label.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         self.track_toolbar.pack(side=tkinter.TOP)
         self.tracker_map.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
+        # connect to the MAV
+        self.mav = self.setup_mav(mav_connect_str)
+        self.fly_target = None
+        self.tracks['TARGET'] = self.tracker_map.add_track('TARGET', track_style='', head_style='bs')
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
@@ -122,13 +137,55 @@ class TrackerApp:
         self.tracks[new_poi] = self.tracker_map.add_track(new_poi, head_style='b^')
         self.tracks[new_poi].update(x,y)
 
+    def fly_to(self,x,y):
+        print(f'Fly to {x},{y}')
+        lat, lon = east_north_to_lat_lon.transform(x,y)
+        print(f'That is {lat}, {lon}')
+        if self.mav:
+            self.fly_target = (lat,lon)
+            self.tracks['TARGET'].update_latlon(lat,lon)
+
+    def cancel_fly_to(self):
+        self.fly_target = None
+        self.tracks['TARGET'].wipe()
+
+    def send_fly_target(self):
+        if self.fly_target:
+            self.mav.mav.set_position_target_global_int_send(
+                0,  # timestamp
+                1,  # target system_id
+                1,  # target component id
+                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE, # |
+                # mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |
+                # mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
+                # mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE,
+                int(self.fly_target[0] * 1.0e7),  # lat
+                int(self.fly_target[1] * 1.0e7),  # lon
+                10,  # alt
+                0,  # vx
+                0,  # vy
+                0,  # vz
+                0,  # afx
+                0,  # afy
+                0,  # afz
+                0,  # yaw
+                0,  # yawrate
+            )
+
     def click_handler(self,e):
         if self.click_mode=='MISPER':
             self.tracks['MISPER'].update(e.xdata,e.ydata)
         elif self.click_mode=='POI':
             self.add_poi(e.xdata, e.ydata)
         elif self.click_mode=='FLY':
-            print(f'Fly to {e.xdata},{e.ydata}')
+            self.fly_to(e.xdata,e.ydata)
+            self.set_click_mode('NAV')
         self.tracker_map.draw()
     
     def hover_handler(self, e):
@@ -144,7 +201,40 @@ class TrackerApp:
         else:
             self.status_msgs.set('')
 
+    def setup_mav(self, mav_connect_str):
+        if mav_connect_str:
+            print(f'Connecting to {mav_connect_str}')
+            mav_connection = mavutil.mavlink_connection(mav_connect_str)
+            print(f'Connected to {mav_connect_str}')
+        else:
+            mav_connection = None
+        return mav_connection
+
+    def timer_loop(self):
+        self.timer_count += 1
+        if self.mav:
+            msg = self.mav.recv_match(type=['HEARTBEAT',
+                                            'GLOBAL_POSITION_INT'
+                                            ], blocking=False)
+        if msg:
+            if 'DRONE' in self.tracks.keys():
+                # seen this drone before
+                if msg.get_type()=='GLOBAL_POSITION_INT':
+                    self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
+            else:
+                # not seen drone before
+                self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
+                self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
+                                                      msg.get_srcComponent(),
+                                                      mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
+        if self.timer_count>=1000:
+            self.timer_count = 0
+            self.tracker_map.draw()
+            self.send_fly_target()
+        self.root.after(1, self.timer_loop)
+
     def run(self):
+        self.timer_loop()
         self.root.mainloop()
 
 def main():
