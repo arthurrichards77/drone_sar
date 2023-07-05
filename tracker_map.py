@@ -37,6 +37,10 @@ class MapTrack:
         x,y = lat_lon_to_east_north.transform(lat, lon)
         self.update(x,y)
 
+    def get_current_pos(self):
+        if self.track_points:
+            return(self.track_points[-1])
+
 
 class TkTrackerMap(FigureCanvasTkAgg):
 
@@ -67,7 +71,9 @@ class TrackerToolbar(tkinter.Frame):
                                                command=functools.partial(parent_app.set_click_mode, new_mode=txt))
             self.buttons[txt].grid(row=0,column=ii)
 
-def distance(x1,y1,x2,y2):
+def distance(p1,p2):
+    x1,y1 = p1
+    x2,y2 = p2
     return sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
 
 class TrackerApp:
@@ -76,8 +82,8 @@ class TrackerApp:
         self.root = tkinter.Tk()
         self.root.wm_title("Tracker Map")
         self.tracker_map = TkTrackerMap(self.root, 'llanbedr_rgb.tif')
-        self.misper_track = self.tracker_map.add_track('MISPER')
-        self.poi_tracks = []
+        self.tracks = {}
+        self.tracks['MISPER'] = self.tracker_map.add_track('MISPER')
         # click event handler and toolbar work together
         self.click_mode = None
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
@@ -110,32 +116,31 @@ class TrackerApp:
         #    else:
         #        self.track_toolbar.buttons[btn]['state'] = tkinter.NORMAL
 
+    def add_poi(self,x,y):
+        num_poi = len([t for t in self.tracks if t.startswith('POI')])
+        new_poi = f'POI{num_poi+1}'
+        self.tracks[new_poi] = self.tracker_map.add_track(new_poi, head_style='b^')
+        self.tracks[new_poi].update(x,y)
+
     def click_handler(self,e):
         if self.click_mode=='MISPER':
-            self.misper_track.update(e.xdata,e.ydata)
+            self.tracks['MISPER'].update(e.xdata,e.ydata)
         elif self.click_mode=='POI':
-            next_poi = len(self.poi_tracks)+1
-            new_poi = self.tracker_map.add_track(f'POI{next_poi}', head_style='b^')
-            self.poi_tracks.append(new_poi)
-            new_poi.update(e.xdata,e.ydata)
+            self.add_poi(e.xdata, e.ydata)
+        elif self.click_mode=='FLY':
+            print(f'Fly to {e.xdata},{e.ydata}')
         self.tracker_map.draw()
-
-    def build_track_toolbar(self):
-        toolbar_frame = tkinter.Frame(master=self.root)
-        nav_button = tkinter.Button(master=toolbar_frame, text='NAV', command=lambda: self.set_click_mode(None))
-        nav_button.grid(row=0,column=0)
-        misper_button = tkinter.Button(master=toolbar_frame, text='MISPER', command=lambda: self.set_click_mode('MISPER'))
-        misper_button.grid(row=0,column=1)
-        poi_button = tkinter.Button(master=toolbar_frame, text='POI', command=lambda: self.set_click_mode('POI'))
-        poi_button.grid(row=0,column=2)
-        fly_button = tkinter.Button(master=toolbar_frame, text='FLY', command=lambda: self.set_click_mode('FLY'))
-        fly_button.grid(row=0,column=3)
-        return toolbar_frame
     
     def hover_handler(self, e):
         if e.xdata:
             lat, lon = east_north_to_lat_lon.transform(e.xdata, e.ydata)
-            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f}''')
+            dist_msg = 'Distances: '
+            for t in self.tracks:
+                pos = self.tracks[t].get_current_pos()
+                if pos:
+                    dist_msg += f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; '
+            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f}
+                                 {dist_msg}''')
         else:
             self.status_msgs.set('')
 
