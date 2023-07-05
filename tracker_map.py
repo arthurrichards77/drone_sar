@@ -6,6 +6,8 @@ from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
 from matplotlib.figure import Figure
 
+import functools
+
 import pyproj
 
 import argparse
@@ -52,6 +54,19 @@ class TkTrackerMap(FigureCanvasTkAgg):
         self.tracks.append(new_track)
         return new_track
     
+class TrackerToolbar(tkinter.Frame):
+
+    def __init__(self, master, parent_app):
+        super().__init__(master=master)
+        self.parent_app = parent_app
+        self.buttons = {}
+        mode_button_list = ['NAV','MISPER','POI','FLY']
+        for (ii,txt) in enumerate(mode_button_list):
+            self.buttons[txt] = tkinter.Button(master=self,
+                                               text=txt,
+                                               command=functools.partial(parent_app.set_click_mode, new_mode=txt))
+            self.buttons[txt].grid(row=0,column=ii)
+
 def distance(x1,y1,x2,y2):
     return sqrt((x1-x2)*(x1-x2) + (y1-y2)*(y1-y2))
 
@@ -66,7 +81,7 @@ class TrackerApp:
         # click event handler and toolbar work together
         self.click_mode = None
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
-        track_toolbar = self.build_track_toolbar()
+        self.track_toolbar = TrackerToolbar(self.root, self)
         # display coordinates etc
         self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3)
@@ -77,17 +92,23 @@ class TrackerApp:
         # assemble the GUI
         self.nav_toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         status_label.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-        track_toolbar.pack(side=tkinter.TOP)
+        self.track_toolbar.pack(side=tkinter.TOP)
         self.tracker_map.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
-        if new_mode:
-            nav_state = tkinter.DISABLED
-        else:
+        print(f'Click mode is {new_mode}')
+        if new_mode=='NAV':
             nav_state = tkinter.NORMAL
+        else:
+            nav_state = tkinter.DISABLED
         for btn in self.nav_toolbar._buttons:
             self.nav_toolbar._buttons[btn]['state'] = nav_state
+        #for btn in self.track_toolbar.buttons:
+        #    if btn==new_mode:
+        #        self.track_toolbar.buttons[btn]['state'] = tkinter.ACTIVE
+        #    else:
+        #        self.track_toolbar.buttons[btn]['state'] = tkinter.NORMAL
 
     def click_handler(self,e):
         if self.click_mode=='MISPER':
