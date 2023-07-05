@@ -114,6 +114,10 @@ class TrackerToolbar(tkinter.Frame):
                                              text='BRK',
                                              command=parent_app.brake)
         self.buttons['BRK'].grid(row=0,column=5)
+        self.buttons['CIR'] = tkinter.Button(master=self,
+                                             text='CIR',
+                                             command=parent_app.circle)
+        self.buttons['CIR'].grid(row=0,column=6)
 
 def distance(p1,p2):
     x1,y1 = p1
@@ -195,7 +199,17 @@ class TrackerApp:
         self.tracks['TARGET'].wipe()
 
     def brake(self):
-        self.mav.set_mode(17)
+        if self.mav:
+            self.mav.set_mode(17)
+
+    def circle(self):
+        if self.mav:
+            self.mav.set_mode(7)
+            rc_channel_values = [65535 for _ in range(18)]
+            rc_channel_values[3] = 1500
+            self.mav.mav.rc_channels_override_send(1,
+                                                   1,
+                                                   *rc_channel_values)
 
     def send_fly_target(self):
         if self.fly_target:
