@@ -12,7 +12,7 @@ import pyproj
 
 import argparse
 
-from math import sqrt
+from math import sqrt, cos, sin, pi
 
 from pymavlink import mavutil
 
@@ -32,17 +32,21 @@ class MapTrack:
         self.head_marker, = parent_map.ax.plot([],[],head_style)
         self.track_points = []
 
-    def update(self,x,y):
-        self.track_points.append((x,y))
-        self.head_marker.set_data([x],[y])
+    def plot(self):
+        if self.track_points:
+            self.head_marker.set_data([self.track_points[-1][0]],[self.track_points[-1][1]])
+        else:
+            self.head_marker.set_data([],[])
         self.track_line.set_data([p[0] for p in self.track_points],
                                  [p[1] for p in self.track_points])
-        
+
+    def update(self,x,y):
+        self.track_points.append((x,y))
+        self.plot()
+
     def wipe(self):
         self.track_points.clear()
-        self.head_marker.set_data([],[])
-        self.track_line.set_data([],
-                                 [])
+        self.plot()
 
     def update_latlon(self,lat,lon):
         x,y = lat_lon_to_east_north.transform(lat, lon)
@@ -52,6 +56,27 @@ class MapTrack:
         if self.track_points:
             return(self.track_points[-1])
 
+class RingedTrack(MapTrack):
+
+    def __init__(self, name, parent_map, track_style='-', head_style='x'):
+        super().__init__(name, parent_map, track_style, head_style)
+        self.radii = []
+        self.ring_lines = []
+
+    def add_ring(self, radius, line_style='-'):
+        self.radii.append(radius)
+        new_ring, = self.parent_map.ax.plot([],[],line_style)
+        self.ring_lines.append(new_ring)
+
+    def plot(self):
+        super().plot()
+        angles = [2*pi*kk/100 for kk in range(100)] + [0]
+        num_rings = len(self.radii)
+        for ii in range(num_rings):
+            ctr_x, ctr_y = self.get_current_pos()
+            ring_x = [ctr_x + self.radii[ii]*cos(a) for a in angles]
+            ring_y = [ctr_y + self.radii[ii]*sin(a) for a in angles]
+            self.ring_lines[ii].set_data(ring_x, ring_y)
 
 class TkTrackerMap(FigureCanvasTkAgg):
 
@@ -63,8 +88,8 @@ class TkTrackerMap(FigureCanvasTkAgg):
         show(base_map, ax=self.ax)
         self.tile_limits = self.ax.axis()
 
-    def add_track(self,name, track_style='-', head_style='x'):
-        new_track = MapTrack(name, self, track_style, head_style)
+    def add_track(self,name, track_style='-', head_style='x', track_type=MapTrack):
+        new_track = track_type(name, self, track_style, head_style)
         return new_track
     
 class TrackerToolbar(tkinter.Frame):
@@ -97,7 +122,12 @@ class TrackerApp:
         self.root.wm_title("Tracker Map")
         self.tracker_map = TkTrackerMap(self.root, tile_file_name)
         self.tracks = {}
-        self.tracks['MISPER'] = self.tracker_map.add_track('MISPER')
+        self.tracks['MISPER'] = self.tracker_map.add_track('MISPER', track_type=RingedTrack)
+        self.tracks['MISPER'].add_ring(350,'g-')
+        self.tracks['MISPER'].add_ring(550,'m-')
+        self.tracks['MISPER'].add_ring(1100,'b-')
+        self.tracks['MISPER'].add_ring(1300,'y-')
+        self.tracks['MISPER'].add_ring(1800,'k-')
         # click event handler and toolbar work together
         self.click_mode = None
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
