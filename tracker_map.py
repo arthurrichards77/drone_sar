@@ -269,8 +269,7 @@ class TrackerApp:
                         self.tracks[chat_name] = self.tracker_map.add_track(chat_name, head_style='m^')
                         self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
 
-    def timer_loop(self):
-        self.timer_count += 1
+    def process_mavlink(self):
         if self.mav:
             msg = self.mav.recv_match(type=['HEARTBEAT',
                                             'GLOBAL_POSITION_INT'
@@ -286,6 +285,10 @@ class TrackerApp:
                     self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
                                                         msg.get_srcComponent(),
                                                         mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
+
+    def timer_loop(self):
+        self.process_mavlink()
+        self.timer_count += 1
         if self.timer_count>=1000:
             # process chat
             self.process_chat()
