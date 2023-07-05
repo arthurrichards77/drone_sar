@@ -16,6 +16,9 @@ from math import sqrt
 
 from pymavlink import mavutil
 
+import requests
+import json
+
 crs_osgb = pyproj.CRS.from_epsg(27700)
 lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_osgb.geodetic_crs, crs_osgb)
 east_north_to_lat_lon = pyproj.Transformer.from_crs(crs_osgb, crs_osgb.geodetic_crs)
@@ -88,7 +91,7 @@ def distance(p1,p2):
 
 class TrackerApp:
 
-    def __init__(self, tile_file_name, mav_connect_str):
+    def __init__(self, tile_file_name, mav_connect_str, chat_url):
         self.root = tkinter.Tk()
         self.timer_count = 0
         self.root.wm_title("Tracker Map")
@@ -115,6 +118,8 @@ class TrackerApp:
         self.mav = self.setup_mav(mav_connect_str)
         self.fly_target = None
         self.tracks['TARGET'] = self.tracker_map.add_track('TARGET', track_style='', head_style='bs')
+        # connect to chat server
+        self.chat_url = chat_url
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
@@ -210,26 +215,43 @@ class TrackerApp:
             mav_connection = None
         return mav_connection
 
+    def process_chat(self):
+        if self.chat_url:
+            chat_inbox_req = requests.get(self.chat_url, verify=False, timeout=0.5)
+            chat_inbox = json.loads(chat_inbox_req.content)
+            for chat_item in chat_inbox:
+                if chat_item['lat']:
+                    chat_name = chat_item['name']
+                    if chat_name in self.tracks.keys():
+                        self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
+                    else:
+                        self.tracks[chat_name] = self.tracker_map.add_track(chat_name, head_style='m^')
+                        self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
+
     def timer_loop(self):
         self.timer_count += 1
         if self.mav:
             msg = self.mav.recv_match(type=['HEARTBEAT',
                                             'GLOBAL_POSITION_INT'
                                             ], blocking=False)
-        if msg:
-            if 'DRONE' in self.tracks.keys():
-                # seen this drone before
-                if msg.get_type()=='GLOBAL_POSITION_INT':
-                    self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
-            else:
-                # not seen drone before
-                self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
-                self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
-                                                      msg.get_srcComponent(),
-                                                      mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
+            if msg:
+                if 'DRONE' in self.tracks.keys():
+                    # seen this drone before
+                    if msg.get_type()=='GLOBAL_POSITION_INT':
+                        self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
+                else:
+                    # not seen drone before
+                    self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
+                    self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
+                                                        msg.get_srcComponent(),
+                                                        mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
         if self.timer_count>=1000:
+            # process chat
+            self.process_chat()
+            # redraw the canvas every second
             self.timer_count = 0
             self.tracker_map.draw()
+            # update target if there is one
             self.send_fly_target()
         self.root.after(1, self.timer_loop)
 
@@ -245,8 +267,11 @@ def main():
     parser.add_argument('-c', '--connect',
                         help='Connection string e.g. tcp:localhost:14550',
                         default=None)
+    parser.add_argument('-s','--server',
+                        help='URL for chat server',
+                        default=None)
     args = parser.parse_args()
-    app = TrackerApp(args.tile_file, args.connect)
+    app = TrackerApp(args.tile_file, args.connect, args.server)
     app.run()
 
 
