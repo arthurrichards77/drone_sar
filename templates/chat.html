@@ -2,24 +2,42 @@
 <html>
 <body>
 
-<p>Enter some text in the fields below, then press the "Submit form" button to submit the form.</p>
+<h1>SAR Report</h1>
 
-<form id="chat_form" action="/chat" method="post">
+<p><a href="/chat">Refresh form</a></p>
+
+<form id="chat_form" action="/chat" method="post" >
     {% if name %}
-    Name: <input type="text" name="name" value="{{ name }}"><br>
+    Name: <input type="text" name="name" value="{{ name }}" required><br>
     {% else %}
-    Name: <input type="text" name="name"><br>
+    Name: <input type="text" name="name" required><br>
     {% endif %}
     Message: <input type="text" name="msg"><br>
-    Latitude: <input type="text" name="lat"><br>
-    Longitude: <input type="text" name="lon"><br>
-  <input type="button" onclick="submit_function()" value="Submit form">
+    <button type="button" onclick="fill_positions();">Locate</button><br>
+    Latitude: <input id="lat" type="text" name="lat"><br>
+    Longitude: <input id="lon" type="text" name="lon"><br>
+    <input type="submit">
 </form>
 
+{% if recv %}
+<p>Received: {{ recv }} </p>
+{% endif %}
+
 <script>
-function submit_function() {
-  document.getElementById("chat_form").submit();
-}
+    var lat_entry = document.getElementById("lat")
+    var lon_entry = document.getElementById("lon")
+        
+    function enterPosition(position) {
+        lat_entry.value = position.coords.latitude;
+        lon_entry.value = position.coords.longitude;
+    }
+
+    function fill_positions() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(enterPosition);
+        }
+    }
+
 </script>
 
 </body>

@@ -38,17 +38,18 @@ def post_result():
 def chat():
     if request.method=='POST':
         sender_name = request.form['name']
-        msg_time = datetime.now()
+        msg_time = datetime.now().isoformat()
+        msg_text = request.form['msg']
         msgs.append({'name': sender_name,
-                     'time': msg_time.isoformat(),
-                     'msg': request.form['msg'],
+                     'time': msg_time,
+                     'msg': msg_text,
                      'lat': request.form['lat'],
                      'lon': request.form['lon'],
                      })
-        print(msgs)
-        return render_template('chat.html', name=sender_name)
+        summary = f'Received "{msg_text}" from {sender_name} at time {msg_time}'
+        return render_template('chat.html', name=sender_name, recv=summary)
     else:
-        return render_template('chat.html', name=None)
+        return render_template('chat.html', name=None, recv=None)
 
 @app.route("/monitor/")
 def monitor():
@@ -61,3 +62,6 @@ def inbox():
     for ii in range(num_msgs):
         received_msgs.append(msgs.pop(0))
     return json.dumps(received_msgs)
+
+if __name__ == "__main__":
+    app.run(ssl_context='adhoc', host='0.0.0.0')
