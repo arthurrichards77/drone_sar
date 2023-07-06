@@ -150,6 +150,10 @@ class TrackerApp:
         self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3)
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
+        # chat window
+        self.chat_var = tkinter.StringVar(master=self.root, value='Chat')
+        chat_label = tkinter.Label(master=self.root, textvariable=self.chat_var, height=3)
+        self.chat_msgs = []
         # include built-in toolbar for map zoom and pan etc
         self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
         self.nav_toolbar.update()
@@ -196,13 +200,14 @@ class TrackerApp:
         self.tracks['TARGET'].wipe()
 
     def brake(self):
-        if self.mav:
-            self.mav.set_mode(17)
+        pos = self.tracks['DRONE'].get_current_pos()
+        if pos:
+            self.fly_to(pos[0], pos[1], 0.0)
 
     def circle(self):
         pos = self.tracks['DRONE'].get_current_pos()
         if pos:
-            self.fly_to(pos[0], pos[1], 0.5)
+            self.fly_to(pos[0], pos[1], 0.25)
 
 
     def send_fly_target(self):
@@ -268,11 +273,13 @@ class TrackerApp:
         if self.chat_url:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                chat_inbox_req = requests.get(self.chat_url, verify=False, timeout=0.5)
+                chat_inbox_req = requests.get(self.chat_url, verify=False, timeout=1.0)
             chat_inbox = json.loads(chat_inbox_req.content)
             for chat_item in chat_inbox:
+                chat_name = chat_item['name']
+                chat_summary = f'{chat_name}: {chat_item['msg']}'
+                self.chat_msgs.append(chat_summary)
                 if chat_item['lat']:
-                    chat_name = chat_item['name']
                     if chat_name.upper()=='PILOT':
                         self.tracks['PILOT'].wipe()
                         self.tracks['PILOT'].update_latlon(chat_item['lat'], chat_item['lon'])
@@ -281,6 +288,7 @@ class TrackerApp:
                     else:
                         self.tracks[chat_name] = self.tracker_map.add_track(chat_name, head_style='m^')
                         self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
+
 
     def process_mavlink(self):
         if self.mav:
@@ -292,7 +300,7 @@ class TrackerApp:
                     # seen this drone before
                     if msg.get_type()=='GLOBAL_POSITION_INT':
                         self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
-                        sensor_offset = 10*(msg.relative_alt/1.0e3)
+                        sensor_offset = 1.0*(msg.relative_alt/1.0e3)
                         drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
                         sensor_x = drone_x + sensor_offset*sin(msg.hdg*1.0e-2*2*pi/360.0)
                         sensor_y = drone_y + sensor_offset*cos(msg.hdg*1.0e-2*2*pi/360.0)
@@ -300,7 +308,7 @@ class TrackerApp:
                 else:
                     # not seen drone before
                     self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
-                    self.tracks['SENSOR'] = self.tracker_map.add_track('Sensor',head_style='-',track_style='g-')
+                    self.tracks['SENSOR'] = self.tracker_map.add_track('Sensor',head_style='g.',track_style='g-')
                     self.tracks['SENSOR'].track_line.set_lw(10)
                     self.tracks['SENSOR'].track_line.set_c((0.,1.,0.,0.5))
                     # request data
