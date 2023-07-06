@@ -336,8 +336,12 @@ class TrackerApp:
     def setup_mav(self, mav_connect_str):
         if mav_connect_str:
             print(f'Connecting to {mav_connect_str}')
-            mav_connection = mavutil.mavlink_connection(mav_connect_str)
-            print(f'Connected to {mav_connect_str}')
+            try:
+                mav_connection = mavutil.mavlink_connection(mav_connect_str)
+                print(f'Connected to {mav_connect_str}')
+            except ConnectionError:
+                print(f'Failed to connect to {mav_connect_str}')
+                mav_connection = None
         else:
             mav_connection = None
         return mav_connection
