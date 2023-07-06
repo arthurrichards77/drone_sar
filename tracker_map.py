@@ -196,8 +196,9 @@ class TrackerApp:
         self.tracks['TARGET'].wipe()
 
     def brake(self):
-        if self.mav:
-            self.mav.set_mode(17)
+        pos = self.tracks['DRONE'].get_current_pos()
+        if pos:
+            self.fly_to(pos[0], pos[1], 0.0)
 
     def circle(self):
         pos = self.tracks['DRONE'].get_current_pos()
@@ -209,7 +210,7 @@ class TrackerApp:
         if self.fly_target:
             self.mav.mav.set_position_target_global_int_send(
                 0,  # timestamp
-                1,  # target system_id
+                2,  # target system_id
                 1,  # target component id
                 mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
@@ -292,7 +293,7 @@ class TrackerApp:
                     # seen this drone before
                     if msg.get_type()=='GLOBAL_POSITION_INT':
                         self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
-                        sensor_offset = 10*(msg.relative_alt/1.0e3)
+                        sensor_offset = 1.0*(msg.relative_alt/1.0e3)
                         drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
                         sensor_x = drone_x + sensor_offset*sin(msg.hdg*1.0e-2*2*pi/360.0)
                         sensor_y = drone_y + sensor_offset*cos(msg.hdg*1.0e-2*2*pi/360.0)
