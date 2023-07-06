@@ -1,23 +1,34 @@
 <!DOCTYPE html>
 <html>
-<body>
+    <head>
+        <style>
+        h1 {
+          font-size: 40px;
+        }
+        
+        p {
+          font-size: 20px;
+        }
+        </style>
+    </head>
+    <body>
 
-<h1>SAR Report</h1>
+        <h1>SAR Report</h1>
 
-<p><a href="/chat">Refresh form</a></p>
+        <p><a href="/chat">Refresh form</a></p>
 
-<form id="chat_form" action="/chat" method="post" >
-    {% if name %}
-    Name: <input type="text" name="name" value="{{ name }}" required><br>
-    {% else %}
-    Name: <input type="text" name="name" required><br>
-    {% endif %}
-    Message: <input type="text" name="msg"><br>
-    <button type="button" onclick="fill_positions();">Locate</button><br>
-    Latitude: <input id="lat" type="text" name="lat"><br>
-    Longitude: <input id="lon" type="text" name="lon"><br>
-    <input type="submit">
-</form>
+        <form id="chat_form" action="/chat" method="post" >
+            {% if name %}
+            <p>Name: <input type="text" name="name" value="{{ name }}" required></p>
+            {% else %}
+            <p>Name: <input type="text" name="name" required></p>
+            {% endif %}
+            <p>Message: <input type="text" name="msg"></p>
+            <button type="button" onclick="fill_positions();">Locate</button></p>
+            <p>Latitude: <input id="lat" type="text" name="lat" required></p>
+            <p>Longitude: <input id="lon" type="text" name="lon" required></p>
+            <input type="submit" />
+        </form>
 
 {% if recv %}
 <p>Received: {{ recv }} </p>
