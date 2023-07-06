@@ -354,13 +354,9 @@ class TrackerApp:
             for chat_item in chat_inbox:
                 chat_name = chat_item['name']
                 chat_msg = chat_item['msg']
-                if chat_msg:
-                    chat_summary = f'{chat_name}: {chat_msg}'
-                    if len(self.chat_msgs)==3:
-                        self.chat_msgs.pop(0)
-                    self.chat_msgs.append(chat_summary)
-                    for (ii,msg) in enumerate(self.chat_msgs):
-                        self.chat_box.insert(ii+1,msg)
+                chat_summary = f'{chat_name}: {chat_msg}'
+                self.chat_msgs.append(chat_summary)
+                self.chat_box.insert(len(self.chat_msgs),chat_summary)
                 if chat_item['lat']:
                     if chat_name.upper()=='PILOT':
                         self.tracks['PILOT'].wipe()
