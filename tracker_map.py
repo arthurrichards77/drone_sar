@@ -21,8 +21,9 @@ import json
 import warnings
 
 crs_osgb = pyproj.CRS.from_epsg(27700)
-lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_osgb.geodetic_crs, crs_osgb)
-east_north_to_lat_lon = pyproj.Transformer.from_crs(crs_osgb, crs_osgb.geodetic_crs)
+crs_gps = pyproj.CRS.from_epsg(4326)
+lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_gps, crs_osgb)
+east_north_to_lat_lon = pyproj.Transformer.from_crs(crs_osgb, crs_gps)
 
 class MapTrack:
 
@@ -80,6 +81,46 @@ class RingedTrack(MapTrack):
                 ring_y = [ctr_y + self.radii[ii]*sin(a) for a in angles]
                 self.ring_lines[ii].set_data(ring_x, ring_y)
 
+class AltMarker:
+
+    def __init__(self, parent_tape, line_style='-', marker_style='o'):
+        self.parent_tape = parent_tape
+        self.alt = None
+        self.alt_line = None
+        self.alt_mark = None
+        if line_style:
+            self.alt_line, = parent_tape.ax.plot([],[],line_style)
+        if marker_style:
+            self.alt_mark, = parent_tape.ax.plot([],[],marker_style)
+
+    def plot(self):
+        if self.alt is not None:
+            if self.alt_line:
+                self.alt_line.set_data([-0.5,0.5],[self.alt, self.alt])
+            if self.alt_mark:
+                self.alt_mark.set_data([0.],[self.alt])
+
+    def wipe(self):
+        self.alt = None
+        self.plot()
+
+    def update_alt(self,alt):
+        self.alt = alt
+        self.plot()
+
+class AltTape(FigureCanvasTkAgg):
+
+    def __init__(self, master):
+        fig = Figure(figsize=(1, 4), dpi=100)
+        super().__init__(fig,master=master)
+        self.ax = fig.add_subplot()
+        self.ax.axis([-0.5,0.5,-50,200])
+        self.draw()
+
+    def add_marker(self, line_style='-', marker_style='o'):
+        new_marker = AltMarker(self, line_style, marker_style)
+        return new_marker
+
 class TkTrackerMap(FigureCanvasTkAgg):
 
     def __init__(self, master, tile_file_name):
@@ -106,18 +147,18 @@ class TrackerToolbar(tkinter.Frame):
                                                text=txt,
                                                command=functools.partial(parent_app.set_click_mode, new_mode=txt))
             self.buttons[txt].grid(row=0,column=ii)
-        self.buttons['CAN'] = tkinter.Button(master=self,
-                                             text='CAN',
-                                             command=parent_app.cancel_fly_to)
-        self.buttons['CAN'].grid(row=0,column=4)
-        self.buttons['BRK'] = tkinter.Button(master=self,
-                                             text='BRK',
+        self.buttons['HOV'] = tkinter.Button(master=self,
+                                             text='HOV',
                                              command=parent_app.brake)
-        self.buttons['BRK'].grid(row=0,column=5)
+        self.buttons['HOV'].grid(row=0,column=4)
         self.buttons['CIR'] = tkinter.Button(master=self,
                                              text='CIR',
                                              command=parent_app.circle)
-        self.buttons['CIR'].grid(row=0,column=6)
+        self.buttons['CIR'].grid(row=0,column=5)
+        self.buttons['CAN'] = tkinter.Button(master=self,
+                                             text='CAN',
+                                             command=parent_app.cancel_fly_to)
+        self.buttons['CAN'].grid(row=0,column=6)
 
 def distance(p1,p2):
     x1,y1 = p1
@@ -130,7 +171,10 @@ class TrackerApp:
         self.root = tkinter.Tk()
         self.timer_count = 0
         self.root.wm_title("Tracker Map")
-        self.tracker_map = TkTrackerMap(self.root, tile_file_name)
+        left_pane = tkinter.Frame(master=self.root)
+        middle_pane = tkinter.Frame(master=self.root)
+        right_pane = tkinter.Frame(master=self.root)
+        self.tracker_map = TkTrackerMap(middle_pane, tile_file_name)
         self.tracks = {}
         # special high level track for MISPER
         self.tracks['MISPER'] = self.tracker_map.add_track('MISPER', track_type=RingedTrack)
@@ -145,24 +189,43 @@ class TrackerApp:
         # click event handler and toolbar work together
         self.click_mode = 'NAV'
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
-        self.track_toolbar = TrackerToolbar(self.root, self)
+        self.track_toolbar = TrackerToolbar(middle_pane, self)
         # display coordinates etc
-        self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
+        self.status_msgs = tkinter.StringVar(master=middle_pane, value='Status')
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
         # chat window
-        self.chat_var = tkinter.StringVar(master=self.root, value='Chat')
-        chat_label = tkinter.Label(master=self.root, textvariable=self.chat_var, height=3, justify=tkinter.LEFT)
+        self.chat_var = tkinter.StringVar(master=right_pane, value='Chat')
+        chat_label = tkinter.Label(master=right_pane, textvariable=self.chat_var, height=3, justify=tkinter.LEFT)
         self.chat_msgs = []
         # include built-in toolbar for map zoom and pan etc
-        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
+        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, middle_pane, pack_toolbar=False)
         self.nav_toolbar.update()
-        # assemble the GUI
-        chat_label.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+        # altitude tape
+        self.alt_tape = AltTape(left_pane)
+        self.alt_marks = {}
+        self.alt_marks['HOME'] = self.alt_tape.add_marker('k-',None)
+        self.alt_marks['HOME'].update_alt(0.0)
+        self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
+        self.alt_marks['MAX'].update_alt(120.0)
+        self.alt_marks['WARN'] = self.alt_tape.add_marker('y-',None)
+        self.alt_marks['WARN'].update_alt(110.0)
+        self.alt_marks['TARGET'] = self.alt_tape.add_marker('b--',None)
+        self.alt_marks['TARGET'].update_alt(20.0)
+        self.alt_tape.mpl_connect("button_press_event", self.alt_click_handler)
+        # assemble the right pane
+        self.alt_tape.get_tk_widget().pack(side=tkinter.RIGHT, fill=tkinter.X, expand=True)
+        # assemble the middle pane
         self.nav_toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         status_label.pack(side=tkinter.BOTTOM, fill=tkinter.X)
         self.track_toolbar.pack(side=tkinter.TOP)
         self.tracker_map.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
+        # assemble the right pane
+        chat_label.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
+        # assemble the panes
+        left_pane.pack(side = tkinter.LEFT)
+        middle_pane.pack(side = tkinter.LEFT)
+        right_pane.pack(side = tkinter.LEFT)
         # connect to the MAV
         self.mav = self.setup_mav(mav_connect_str)
         self.fly_target = None
@@ -191,32 +254,42 @@ class TrackerApp:
         self.tracks[new_poi] = self.tracker_map.add_track(new_poi, head_style='b^')
         self.tracks[new_poi].update(x,y)
 
-    def fly_to(self,x,y,yaw_rate=0.0):
+    def fly_to(self,x,y,yaw_rate=0.0,alt=None):
         lat, lon = east_north_to_lat_lon.transform(x,y)
         self.fly_target = (lat,lon,yaw_rate)
         self.tracks['TARGET'].wipe()
         self.tracks['TARGET'].update_latlon(lat,lon)
+        if alt:
+            self.alt_marks['TARGET'].update_alt(alt)
+
+    def get_target_drone_name(self):
+        return [tn for tn in self.tracks.keys() if tn.startswith('DRONE')][0]
+
+    def get_target_drone_num(self):
+        drone_name = self.get_target_drone_name()
+        return int(drone_name[5:])
 
     def cancel_fly_to(self):
         self.fly_target = None
         self.tracks['TARGET'].wipe()
 
     def brake(self):
-        pos = self.tracks['DRONE'].get_current_pos()
+        pos = self.tracks[self.get_target_drone_name()].get_current_pos()
         if pos:
             self.fly_to(pos[0], pos[1], 0.0)
 
     def circle(self):
-        pos = self.tracks['DRONE'].get_current_pos()
+        pos = self.tracks[self.get_target_drone_name()].get_current_pos()
         if pos:
             self.fly_to(pos[0], pos[1], 0.25)
 
-
     def send_fly_target(self):
         if self.fly_target:
+            # hack to get the target ID
+            
             self.mav.mav.set_position_target_global_int_send(
                 0,  # timestamp
-                2,  # target system_id
+                self.get_target_drone_num(),  # target system_id
                 1,  # target component id
                 mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
@@ -228,7 +301,7 @@ class TrackerApp:
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE,
                 int(self.fly_target[0] * 1.0e7),  # lat
                 int(self.fly_target[1] * 1.0e7),  # lon
-                20,  # alt
+                self.alt_marks['TARGET'].alt,  # alt
                 0,  # vx
                 0,  # vy
                 0,  # vz
@@ -238,6 +311,10 @@ class TrackerApp:
                 0,  # yaw
                 self.fly_target[2],  # yawrate
             )
+
+    def alt_click_handler(self,e):
+        self.alt_marks['TARGET'].update_alt(e.ydata)
+        self.alt_tape.draw()
 
     def click_handler(self,e):
         if self.click_mode=='MISPER':
@@ -303,21 +380,26 @@ class TrackerApp:
                                             'GLOBAL_POSITION_INT'
                                             ], blocking=False)
             if msg:
-                if 'DRONE' in self.tracks.keys():
+                drone_num = msg.get_srcSystem()
+                drone_name = f'DRONE{drone_num}'
+                sensor_name = f'SENSOR{drone_num}'
+                if drone_name in self.tracks.keys():
                     # seen this drone before
                     if msg.get_type()=='GLOBAL_POSITION_INT':
-                        self.tracks['DRONE'].update_latlon(msg.lat/1e7,msg.lon/1e7)
+                        self.tracks[drone_name].update_latlon(msg.lat/1e7,msg.lon/1e7)
+                        self.alt_marks[drone_name].update_alt(msg.relative_alt/1e3)
                         sensor_offset = 1.0*(msg.relative_alt/1.0e3)
-                        drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
+                        drone_x, drone_y = self.tracks[drone_name].get_current_pos()
                         sensor_x = drone_x + sensor_offset*sin(msg.hdg*1.0e-2*2*pi/360.0)
                         sensor_y = drone_y + sensor_offset*cos(msg.hdg*1.0e-2*2*pi/360.0)
-                        self.tracks['SENSOR'].update(sensor_x,sensor_y)
+                        self.tracks[sensor_name].update(sensor_x,sensor_y)
                 else:
                     # not seen drone before
-                    self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
-                    self.tracks['SENSOR'] = self.tracker_map.add_track('Sensor',head_style='go',track_style='g-')
-                    self.tracks['SENSOR'].track_line.set_lw(10)
-                    self.tracks['SENSOR'].track_line.set_c((0.,1.,0.,0.5))
+                    self.tracks[drone_name] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
+                    self.tracks[sensor_name] = self.tracker_map.add_track('Sensor',head_style='go',track_style='g-')
+                    self.tracks[sensor_name].track_line.set_lw(10)
+                    self.tracks[sensor_name].track_line.set_c((0.,1.,0.,0.5))
+                    self.alt_marks[drone_name] = self.alt_tape.add_marker(line_style=None, marker_style='bx')
                     # request data
                     self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
                                                         msg.get_srcComponent(),
@@ -332,6 +414,7 @@ class TrackerApp:
         self.process_chat()
         # redraw the canvas every second
         self.tracker_map.draw()
+        self.alt_tape.draw()
         # update target if there is one
         if self.mav:
             self.send_fly_target()
