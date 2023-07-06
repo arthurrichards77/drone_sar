@@ -193,8 +193,7 @@ class TrackerApp:
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
         # chat window
-        self.chat_var = tkinter.StringVar(master=self.root, value='Chat')
-        chat_label = tkinter.Label(master=self.root, textvariable=self.chat_var, height=3, justify=tkinter.LEFT)
+        self.chat_box = tkinter.Listbox(master=self.root)
         self.chat_msgs = []
         # include built-in toolbar for map zoom and pan etc
         self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
@@ -219,7 +218,7 @@ class TrackerApp:
         self.nav_toolbar.grid(row=2,column=1)
         status_label.grid(row=3,column=1)
         # assemble the right pane
-        chat_label.grid(row=1,column=2)
+        self.chat_box.grid(row=1,column=2)
         # connect to the MAV
         self.mav = self.setup_mav(mav_connect_str)
         self.fly_target = None
@@ -360,7 +359,8 @@ class TrackerApp:
                     if len(self.chat_msgs)==3:
                         self.chat_msgs.pop(0)
                     self.chat_msgs.append(chat_summary)
-                    self.chat_var.set("\n".join(self.chat_msgs))
+                    for (ii,msg) in enumerate(self.chat_msgs):
+                        self.chat_box.insert(ii+1,msg)
                 if chat_item['lat']:
                     if chat_name.upper()=='PILOT':
                         self.tracks['PILOT'].wipe()
