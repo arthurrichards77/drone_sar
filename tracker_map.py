@@ -111,11 +111,11 @@ class AltMarker:
 class AltTape(FigureCanvasTkAgg):
 
     def __init__(self, master):
-        fig = Figure(figsize=(1, 4), dpi=100)
+        fig = Figure(figsize=(1.5, 5), dpi=100)
         super().__init__(fig,master=master)
         self.ax = fig.add_subplot()
         self.ax.axis([-0.5,0.5,-50,200])
-        self.draw()
+        fig.tight_layout()
 
     def add_marker(self, line_style='-', marker_style='o'):
         new_marker = AltMarker(self, line_style, marker_style)
@@ -124,12 +124,13 @@ class AltTape(FigureCanvasTkAgg):
 class TkTrackerMap(FigureCanvasTkAgg):
 
     def __init__(self, master, tile_file_name):
-        fig = Figure(figsize=(5, 4), dpi=100)
+        fig = Figure(figsize=(7, 5), dpi=100)
         super().__init__(fig,master=master)
         self.ax = fig.add_subplot()
         base_map = rasterio.open(tile_file_name)
         show(base_map, ax=self.ax)
         self.tile_limits = self.ax.axis()
+        fig.tight_layout()
 
     def add_track(self,name, track_style='-', head_style='x', track_type=MapTrack):
         new_track = track_type(name, self, track_style, head_style)
@@ -171,10 +172,7 @@ class TrackerApp:
         self.root = tkinter.Tk()
         self.timer_count = 0
         self.root.wm_title("Tracker Map")
-        left_pane = tkinter.Frame(master=self.root)
-        middle_pane = tkinter.Frame(master=self.root)
-        right_pane = tkinter.Frame(master=self.root)
-        self.tracker_map = TkTrackerMap(middle_pane, tile_file_name)
+        self.tracker_map = TkTrackerMap(self.root, tile_file_name)
         self.tracks = {}
         # special high level track for MISPER
         self.tracks['MISPER'] = self.tracker_map.add_track('MISPER', track_type=RingedTrack)
@@ -189,20 +187,20 @@ class TrackerApp:
         # click event handler and toolbar work together
         self.click_mode = 'NAV'
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
-        self.track_toolbar = TrackerToolbar(middle_pane, self)
+        self.track_toolbar = TrackerToolbar(self.root, self)
         # display coordinates etc
-        self.status_msgs = tkinter.StringVar(master=middle_pane, value='Status')
+        self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
         # chat window
-        self.chat_var = tkinter.StringVar(master=right_pane, value='Chat')
-        chat_label = tkinter.Label(master=right_pane, textvariable=self.chat_var, height=3, justify=tkinter.LEFT)
+        self.chat_var = tkinter.StringVar(master=self.root, value='Chat')
+        chat_label = tkinter.Label(master=self.root, textvariable=self.chat_var, height=3, justify=tkinter.LEFT)
         self.chat_msgs = []
         # include built-in toolbar for map zoom and pan etc
-        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, middle_pane, pack_toolbar=False)
+        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
         self.nav_toolbar.update()
         # altitude tape
-        self.alt_tape = AltTape(left_pane)
+        self.alt_tape = AltTape(self.root)
         self.alt_marks = {}
         self.alt_marks['HOME'] = self.alt_tape.add_marker('k-',None)
         self.alt_marks['HOME'].update_alt(0.0)
@@ -213,19 +211,15 @@ class TrackerApp:
         self.alt_marks['TARGET'] = self.alt_tape.add_marker('b--',None)
         self.alt_marks['TARGET'].update_alt(20.0)
         self.alt_tape.mpl_connect("button_press_event", self.alt_click_handler)
-        # assemble the right pane
-        self.alt_tape.get_tk_widget().pack(side=tkinter.RIGHT, fill=tkinter.X, expand=True)
+        # assemble the left pane
+        self.alt_tape.get_tk_widget().grid(row=1,column=0,padx=10)
         # assemble the middle pane
-        self.nav_toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-        status_label.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-        self.track_toolbar.pack(side=tkinter.TOP)
-        self.tracker_map.get_tk_widget().pack(side=tkinter.TOP, fill=tkinter.BOTH, expand=True)
+        self.track_toolbar.grid(row=0,column=1)
+        self.tracker_map.get_tk_widget().grid(row=1,column=1)
+        self.nav_toolbar.grid(row=2,column=1)
+        status_label.grid(row=3,column=1)
         # assemble the right pane
-        chat_label.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
-        # assemble the panes
-        left_pane.pack(side = tkinter.LEFT)
-        middle_pane.pack(side = tkinter.LEFT)
-        right_pane.pack(side = tkinter.LEFT)
+        chat_label.grid(row=1,column=2)
         # connect to the MAV
         self.mav = self.setup_mav(mav_connect_str)
         self.fly_target = None
