@@ -7,6 +7,9 @@ app = Flask(__name__)
 msgs = []
 
 @app.route("/")
+def home():
+        return render_template('home.html')
+
 @app.route("/chat/", methods=['GET', 'POST'])
 def chat():
     if request.method=='POST':
