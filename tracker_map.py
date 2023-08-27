@@ -20,6 +20,8 @@ import requests
 import json
 import warnings
 
+from terrain import TerrainTileCollection
+
 crs_osgb = pyproj.CRS.from_epsg(27700)
 crs_gps = pyproj.CRS.from_epsg(4326)
 lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_gps, crs_osgb)
@@ -45,6 +47,12 @@ class MapTrack:
     def update(self,x,y):
         self.track_points.append((x,y))
         self.plot()
+
+    def location(self):
+        if len(self.track_points)>0:
+            return self.track_points[-1]
+        else:
+            return None
 
     def wipe(self):
         self.track_points.clear()
@@ -168,7 +176,7 @@ def distance(p1,p2):
 
 class TrackerApp:
 
-    def __init__(self, tile_file_name, mav_connect_str, chat_url):
+    def __init__(self, tile_file_name, mav_connect_str, chat_url, terrain_path):
         self.root = tkinter.Tk()
         self.timer_count = 0
         self.root.wm_title("Tracker Map")
@@ -201,8 +209,8 @@ class TrackerApp:
         # altitude tape
         self.alt_tape = AltTape(self.root)
         self.alt_marks = {}
-        self.alt_marks['HOME'] = self.alt_tape.add_marker('k-',None)
-        self.alt_marks['HOME'].update_alt(0.0)
+        self.alt_marks['SEA_LEVEL'] = self.alt_tape.add_marker('b-',None)
+        self.alt_marks['SEA_LEVEL'].update_alt(0.0)
         self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
         self.alt_marks['MAX'].update_alt(120.0)
         self.alt_marks['WARN'] = self.alt_tape.add_marker('y-',None)
@@ -225,6 +233,8 @@ class TrackerApp:
         self.tracks['TARGET'] = self.tracker_map.add_track('TARGET', track_style='', head_style='bs')
         # connect to chat server
         self.chat_url = chat_url
+        # load terrain
+        self.terrain = TerrainTileCollection(terrain_path)
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
@@ -294,7 +304,7 @@ class TrackerApp:
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE,
                 int(self.fly_target[0] * 1.0e7),  # lat
                 int(self.fly_target[1] * 1.0e7),  # lon
-                self.alt_marks['TARGET'].alt,  # alt
+                self.alt_marks['TARGET'].alt - self.alt_marks[drone_name+'_TAKEOFF'].alt,  # alt, ASL target converted relative to takeoff 
                 0,  # vx
                 0,  # vy
                 0,  # vz
@@ -322,12 +332,13 @@ class TrackerApp:
     def hover_handler(self, e):
         if e.xdata:
             lat, lon = east_north_to_lat_lon.transform(e.xdata, e.ydata)
+            terrain_alt = self.terrain.lookup(e.xdata, e.ydata)
             dist_msg = 'Distances: '
             for t in self.tracks:
                 pos = self.tracks[t].get_current_pos()
                 if pos:
                     dist_msg += f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; '
-            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f}  Mode {self.click_mode}
+            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f},{terrain_alt:.1f}m ASL  Mode {self.click_mode}
                                  {dist_msg}''')
         else:
             self.status_msgs.set('')
@@ -381,7 +392,14 @@ class TrackerApp:
                     # seen this drone before
                     if msg.get_type()=='GLOBAL_POSITION_INT':
                         self.tracks[drone_name].update_latlon(msg.lat/1e7,msg.lon/1e7)
-                        self.alt_marks[drone_name].update_alt(msg.relative_alt/1e3)
+                        terrain_under_drone = self.terrain.lookup(self.tracks[drone_name].location()[0],
+                                                                  self.tracks[drone_name].location()[1])
+                        if msg.relative_alt<10:
+                            # must be takeoff - BAD ASSUMPTION
+                            self.tracks[drone_name+'_TAKEOFF'].update_latlon(msg.lat/1e7,msg.lon/1e7)
+                            self.alt_marks[drone_name+'_TAKEOFF'].update_alt(terrain_under_drone)
+                        self.alt_marks[drone_name].update_alt(msg.relative_alt/1e3 + self.alt_marks[drone_name+'_TAKEOFF'].alt)
+                        self.alt_marks[drone_name+'_TERRAIN'].update_alt(terrain_under_drone)
                         sensor_offset = 1.0*(msg.relative_alt/1.0e3)
                         drone_x, drone_y = self.tracks[drone_name].get_current_pos()
                         sensor_x = drone_x + sensor_offset*sin(msg.hdg*1.0e-2*2*pi/360.0)
@@ -390,10 +408,13 @@ class TrackerApp:
                 else:
                     # not seen drone before
                     self.tracks[drone_name] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
+                    self.tracks[drone_name+'_TAKEOFF'] = self.tracker_map.add_track('Drone Takeoff',head_style='bs',track_style='bs')
                     self.tracks[sensor_name] = self.tracker_map.add_track('Sensor',head_style='go',track_style='g-')
                     self.tracks[sensor_name].track_line.set_lw(10)
                     self.tracks[sensor_name].track_line.set_c((0.,1.,0.,0.5))
                     self.alt_marks[drone_name] = self.alt_tape.add_marker(line_style=None, marker_style='bx')
+                    self.alt_marks[drone_name+'_TAKEOFF'] = self.alt_tape.add_marker(line_style=None, marker_style='bs')
+                    self.alt_marks[drone_name+'_TERRAIN'] = self.alt_tape.add_marker(line_style='g-', marker_style=None)
                     # request data
                     self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
                                                         msg.get_srcComponent(),
@@ -430,8 +451,11 @@ def main():
     parser.add_argument('-s','--server',
                         help='URL for chat server',
                         default=None)
+    parser.add_argument('-p','--path_to_terrain',
+                        help='Path to search for terrain files',
+                        default='map_data/Download_llanbedr_terrain_2297518/terrain-5-dtm_5107396')
     args = parser.parse_args()
-    app = TrackerApp(args.tile_file, args.connect, args.server)
+    app = TrackerApp(args.tile_file, args.connect, args.server, args.path_to_terrain)
     app.run()
 
 

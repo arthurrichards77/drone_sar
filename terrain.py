@@ -86,7 +86,7 @@ class TerrainTileCollection:
         for ii,tile in enumerate(self.tiles):
             z = tile.lookup(x,y)
             if not np.isnan(z):
-                print(f'Tile {ii} has it with height {z}.')
+                #print(f'Tile {ii} has it with height {z}.')
                 break
         return z
 
