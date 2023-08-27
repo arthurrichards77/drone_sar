@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
@@ -48,25 +49,59 @@ class TerrainTile:
         self.y = np.arange(self.yllcorner,
                            self.yllcorner+self.nrows*self.cellsize,
                            self.cellsize)
-        self.interp = RegularGridInterpolator((self.x,self.y),self.Z.T,bounds_error=False)
+        self._interp = RegularGridInterpolator((self.x,self.y),self.Z.T,bounds_error=False)
 
     def plot(self, ax=None, show=True):
         if ax is None:
             _, ax = plt.subplots(subplot_kw={"projection": "3d"})
         xg,yg = np.meshgrid(self.x,self.y)
         # Plot the surface
-        surf = ax.plot_surface(xg, yg, self.Z,
-                               linewidth=0, antialiased=True)
+        ax.plot_surface(xg, yg, self.Z)
         if show:
             plt.show()
 
+    def lookup(self,x,y):
+        return self._interp((x,y))
+
+class TerrainTileCollection:
+
+    def __init__(self,search_root='.'):
+        self.tiles = []
+        for root, dirs, files in os.walk(search_root):
+            for filename in files:
+                if filename.lower().endswith('.asc'):
+                    full_path = os.path.join(root, filename)
+                    print(f'Loading {full_path}')
+                    self.tiles.append(TerrainTile(full_path))
+
+    def plot(self, ax=None, show=True):
+        if ax is None:
+            _, ax = plt.subplots(subplot_kw={"projection": "3d"})
+        for tile in self.tiles:
+            tile.plot(ax=ax,show=False)
+        if show:
+            plt.show()
+
+    def lookup(self,x,y):
+        for ii,tile in enumerate(self.tiles):
+            z = tile.lookup(x,y)
+            print(z,np.nan)
+            if not np.isnan(z):
+                print(f'Tile {ii} has it with height {z}.')
+                break
+        return z
+
 
 if __name__=='__main__':
-    tile = TerrainTile('map_data/Download_llanbedr_terrain_2297518/terrain-5-dtm_5107396/sh/SH52NE.asc')
     _, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    tile.plot(ax=ax, show=False)
-    x_samp, y_samp = 259900, 328000
-    z_samp = tile.interp((x_samp,y_samp))
+    #tile = TerrainTile('map_data/Download_llanbedr_terrain_2297518/terrain-5-dtm_5107396/sh/SH52NE.asc')
+    #tile.plot(ax=ax, show=False)
+    # now test whole collection of tiles
+    tile_cltn = TerrainTileCollection('map_data/Download_llanbedr_terrain_2297518/terrain-5-dtm_5107396')
+    tile_cltn.plot(ax=ax, show=False)
+    x_samp, y_samp = 258000, 322000
+    z_samp = tile_cltn.lookup(x_samp,y_samp)
     print(x_samp,y_samp,z_samp)
     ax.plot([x_samp],[y_samp],[z_samp],marker='*',c='r')
     plt.show()
+    
