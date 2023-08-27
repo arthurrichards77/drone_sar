@@ -13,7 +13,7 @@ class TerrainTile:
         self.cellsize = None
         self.Z = None
         num_rows_read = 0
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='ascii') as f:
             for line in f:
                 line_bits = [item.strip() for item in line.split(' ')]
                 if line_bits[0]=='nrows':
@@ -67,7 +67,7 @@ class TerrainTileCollection:
 
     def __init__(self,search_root='.'):
         self.tiles = []
-        for root, dirs, files in os.walk(search_root):
+        for root, _, files in os.walk(search_root):
             for filename in files:
                 if filename.lower().endswith('.asc'):
                     full_path = os.path.join(root, filename)
@@ -85,7 +85,6 @@ class TerrainTileCollection:
     def lookup(self,x,y):
         for ii,tile in enumerate(self.tiles):
             z = tile.lookup(x,y)
-            print(z,np.nan)
             if not np.isnan(z):
                 print(f'Tile {ii} has it with height {z}.')
                 break
