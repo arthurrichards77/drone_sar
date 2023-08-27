@@ -1,0 +1,69 @@
+********************************************************************
+
+EDINA DIGIMAP:
+
+DIGITAL DATA SUPPLY
+
+********************************************************************
+
+
+This data is distributed under licence by:
+
+    EDINA
+    University of Edinburgh
+    https://edina.ac.uk
+
+    Tel:    0131 650 3302
+    Fax:    0131 650 3308
+    Email:  digimap@ed.ac.uk
+		
+
+
+---------------------------------------------------------
+
+CONTENTS
+
+You will have received the data files listed below, each product and area has
+its own folder. Note that each data folder contains a conditions.txt file
+which states the conditions for use of the data within. These conditions can
+vary between different data products.
+
+
+
+-------------------------------------------------------------------------------
+Folder:           terrain-5-dtm_5107396
+Extent:           250018.0190057623, 320424.5222407615 - 259765.54528243231, 329780.84344947146
+Date Ordered:     13 July 2023 at 19:19:25
+Product:          OS Terrain 5
+Version:          April 2023
+Format:           ASC
+Theme:            N/A
+Area:             3 tiles
+Tiles:
+ 
+Tile Name:        sh52ne
+Extent:           255000.0, 325000.0 - 260000.0, 330000.0
+Last Amended:     7 February 2020
+  
+Tile Name:        sh52nw
+Extent:           250000.0, 325000.0 - 255000.0, 330000.0
+Last Amended:     7 February 2020
+  
+Tile Name:        sh52se
+Extent:           255000.0, 320000.0 - 260000.0, 325000.0
+Last Amended:     7 February 2020
+    -------------------------------------------------------------------------------
+Folder:           terrain-50-dtm_5107397
+Extent:           250018.0190057623, 320424.5222407615 - 259765.54528243231, 329780.84344947146
+Date Ordered:     13 July 2023 at 19:19:25
+Product:          OS Terrain 50
+Version:          August 2022
+Format:           ASC
+Theme:            N/A
+Area:             1 tiles
+Tiles:
+ 
+Tile Name:        sh52
+Extent:           250000.0, 320000.0 - 260000.0, 330000.0
+Last Amended:     6 May 2022
+     

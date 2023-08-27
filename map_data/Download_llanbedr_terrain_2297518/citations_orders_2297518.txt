@@ -1,0 +1,15 @@
+The citations in this document should be used to reference the maps and data
+when they have been included in any essays, dissertations or other academic
+works. You should cite the data even if it doesn't appear as an image or map
+in your work if it has been used to generate findings or a new dataset that is
+used.
+
+There is one entry for each product and selected area; you can edit the
+citation if you only use part of the data it covers. Any citations provided
+below are a guide only and should be given in addition to any requirement to
+acknowledge sources and copyright of any data used or any local guidance
+provided:
+
+OS Terrain 5 [ASC geospatial data], Scale 1:10000, Tiles: sh52ne,sh52nw,sh52se, Updated: 20 March 2023, Ordnance Survey (GB), Using: EDINA Digimap Ordnance Survey Service, <https://digimap.edina.ac.uk>, Downloaded: 2023-07-13 19:19:25.793
+OS Terrain 50 [ASC geospatial data], Scale 1:50000, Tiles: sh52, Updated: 6 May 2022, Ordnance Survey (GB), Using: EDINA Digimap Ordnance Survey Service, <https://digimap.edina.ac.uk>, Downloaded: 2023-07-13 19:19:25.793
+
