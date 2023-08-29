@@ -305,7 +305,6 @@ class TrackerApp:
         self.alt_marks['TAKEOFF'] = self.alt_tape.add_marker(line_style=None, marker_style='bs')
         self.alt_marks['TERRAIN'] = self.alt_tape.add_marker(line_style='g-', marker_style=None)
         self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
-        self.alt_marks['WARN'] = self.alt_tape.add_marker('y-',None)
         # connect to chat server
         self.chat_url = chat_url
         # load terrain
@@ -416,6 +415,7 @@ class TrackerApp:
             drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
             terrain_under_drone = self.terrain.lookup(drone_x, drone_y)
             self.alt_marks['TERRAIN'].update_alt(terrain_under_drone)
+            self.alt_marks['MAX'].update_alt(terrain_under_drone+120.0)
             if self.alt_marks['TAKEOFF'].alt:
                 # I know take off location - can compute ASL
                 alt_asl = rel_alt + self.alt_marks['TAKEOFF'].alt
