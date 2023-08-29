@@ -1,9 +1,11 @@
+import time
+
 import rasterio
 from rasterio.plot import show
 
 import tkinter
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import matplotlib.dates as mdates
 from matplotlib.figure import Figure
 
 import functools
@@ -14,18 +16,19 @@ import argparse
 
 from math import sqrt, cos, sin, pi
 
-from pymavlink import mavutil
-
 import requests
 import json
 import warnings
 
 from terrain import TerrainTileCollection
+from drone_interface import DroneInterface
 
 crs_osgb = pyproj.CRS.from_epsg(27700)
 crs_gps = pyproj.CRS.from_epsg(4326)
 lat_lon_to_east_north = pyproj.Transformer.from_crs(crs_gps, crs_osgb)
 east_north_to_lat_lon = pyproj.Transformer.from_crs(crs_osgb, crs_gps)
+
+deg_to_rad = pi/180.0
 
 class MapTrack:
 
@@ -47,12 +50,6 @@ class MapTrack:
     def update(self,x,y):
         self.track_points.append((x,y))
         self.plot()
-
-    def location(self):
-        if len(self.track_points)>0:
-            return self.track_points[-1]
-        else:
-            return None
 
     def wipe(self):
         self.track_points.clear()
@@ -116,6 +113,7 @@ class AltMarker:
         self.alt = alt
         self.plot()
 
+
 class AltTape(FigureCanvasTkAgg):
 
     def __init__(self, master):
@@ -128,6 +126,69 @@ class AltTape(FigureCanvasTkAgg):
     def add_marker(self, line_style='-', marker_style='o'):
         new_marker = AltMarker(self, line_style, marker_style)
         return new_marker
+
+
+class TimeMarker:
+
+    def __init__(self, parent_tape, line_style='-', marker_style='o'):
+        self.parent_tape = parent_tape
+        self.time_secs = None
+        self.time_line = None
+        self.time_mark = None
+        if line_style:
+            self.time_line, = parent_tape.ax.plot([],[],line_style)
+        if marker_style:
+            self.time_mark, = parent_tape.ax.plot([],[],marker_style)
+
+    def plot(self):
+        if self.time_secs is not None:
+            if self.time_line:
+                self.time_line.set_data([self.time_secs, self.time_secs],[-0.5,0.5])
+            if self.time_mark:
+                self.time_mark.set_data([self.time_secs],[0.])
+
+    def wipe(self):
+        self.time_secs = None
+        self.plot()
+
+    def update_time(self,time_secs):
+        self.time_secs = time_secs
+        self.plot()
+
+    def update_now(self):
+        self.update_time(time.time())
+        self.plot()
+
+class TimeTape(FigureCanvasTkAgg):
+
+    def __init__(self, master):
+        fig = Figure(figsize=(7, 1), dpi=100)
+        super().__init__(fig,master=master)
+        self.ax = fig.add_subplot()
+        self.time_range = [-3600,3600]
+        self.ax.axis([self.time_range[0],self.time_range[1],-0.5,0.5])
+        #fig.autofmt_xdate()
+        fig.tight_layout()
+
+    def add_marker(self, line_style='-', marker_style='o'):
+        new_marker = TimeMarker(self, line_style, marker_style)
+        return new_marker
+
+    def draw_now(self):
+        time_now = time.time()
+        # lots of work to label the axis intuitively
+        str_now = time.localtime()
+        first_tick = time.mktime((str_now.tm_year, str_now.tm_mon, str_now.tm_mday,
+                                  str_now.tm_hour-1, 0, 0,
+                                  str_now.tm_wday, str_now.tm_yday, str_now.tm_isdst))
+        tick_range = [first_tick + ii*900 for ii in range(12)]
+        self.ax.set_xticks(tick_range)
+        self.ax.set_xticklabels([time.strftime('%H:%M',time.localtime(t)) for t in tick_range])
+        # range is either side of current time
+        self.ax.axis([self.time_range[0]+time_now,
+                      self.time_range[1]+time_now,
+                      -0.5,0.5])
+        self.draw()
 
 class TkTrackerMap(FigureCanvasTkAgg):
 
@@ -158,7 +219,7 @@ class TrackerToolbar(tkinter.Frame):
             self.buttons[txt].grid(row=0,column=ii)
         self.buttons['HOV'] = tkinter.Button(master=self,
                                              text='HOV',
-                                             command=parent_app.brake)
+                                             command=parent_app.hover)
         self.buttons['HOV'].grid(row=0,column=4)
         self.buttons['CIR'] = tkinter.Button(master=self,
                                              text='CIR',
@@ -212,13 +273,14 @@ class TrackerApp:
         self.alt_marks = {}
         self.alt_marks['SEA_LEVEL'] = self.alt_tape.add_marker('b-',None)
         self.alt_marks['SEA_LEVEL'].update_alt(0.0)
-        self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
-        self.alt_marks['MAX'].update_alt(120.0)
-        self.alt_marks['WARN'] = self.alt_tape.add_marker('y-',None)
-        self.alt_marks['WARN'].update_alt(110.0)
-        self.alt_marks['TARGET'] = self.alt_tape.add_marker('b--',None)
-        self.alt_marks['TARGET'].update_alt(20.0)
         self.alt_tape.mpl_connect("button_press_event", self.alt_click_handler)
+        # timeline
+        self.time_tape = TimeTape(self.root)
+        self.time_markers = {'NOW': self.time_tape.add_marker(line_style='k-',marker_style=None),
+                             'TAKEOFF': self.time_tape.add_marker(line_style='b-',marker_style=None),
+                             'TURNBACK': self.time_tape.add_marker(line_style='y-',marker_style='yv'),
+                             'BATTERY': self.time_tape.add_marker(line_style='r-',marker_style='rs'),
+                             'ENDURANCE': self.time_tape.add_marker(line_style='r-',marker_style='ro'),}
         # assemble the left pane
         self.alt_tape.get_tk_widget().grid(row=2,column=0,padx=10)
         # assemble the middle pane
@@ -226,12 +288,24 @@ class TrackerApp:
         self.nav_toolbar.grid(row=1,column=1)
         self.tracker_map.get_tk_widget().grid(row=2,column=1)
         status_label.grid(row=3,column=1)
+        self.time_tape.get_tk_widget().grid(row=4,column=1)
         # assemble the right pane
         self.chat_box.grid(row=2,column=2)
         # connect to the MAV
-        self.mav = self.setup_mav(mav_connect_str)
-        self.fly_target = None
+        self.mav = DroneInterface(mav_connect_str)
+        # add loads of tracking for the drone
+        self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
         self.tracks['TARGET'] = self.tracker_map.add_track('TARGET', track_style='', head_style='bs')
+        self.tracks['TAKEOFF'] = self.tracker_map.add_track('Takeoff',head_style='bs',track_style='bs')
+        self.tracks['SENSOR'] = self.tracker_map.add_track('Sensor',head_style='go',track_style='g-')
+        self.tracks['SENSOR'].track_line.set_lw(10)
+        self.tracks['SENSOR'].track_line.set_c((0.,1.,0.,0.5))
+        self.alt_marks['DRONE'] = self.alt_tape.add_marker(line_style=None, marker_style='bx')
+        self.alt_marks['TARGET'] = self.alt_tape.add_marker('b--',None)
+        self.alt_marks['TAKEOFF'] = self.alt_tape.add_marker(line_style=None, marker_style='bs')
+        self.alt_marks['TERRAIN'] = self.alt_tape.add_marker(line_style='g-', marker_style=None)
+        self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
+        self.alt_marks['WARN'] = self.alt_tape.add_marker('y-',None)
         # connect to chat server
         self.chat_url = chat_url
         # load terrain
@@ -239,13 +313,14 @@ class TrackerApp:
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
-        print(f'Click mode is {new_mode}')
+        # disable the plot navigation toolbar unless in NAV
         if new_mode=='NAV':
             nav_state = tkinter.NORMAL
         else:
             nav_state = tkinter.DISABLED
         for btn in self.nav_toolbar._buttons:
             self.nav_toolbar._buttons[btn]['state'] = nav_state
+        # make the chosen mode green
         for btn in self.track_toolbar.buttons:
             if btn==new_mode:
                 self.track_toolbar.buttons[btn].configure(bg="LimeGreen")
@@ -258,64 +333,29 @@ class TrackerApp:
         self.tracks[new_poi] = self.tracker_map.add_track(new_poi, head_style='b^')
         self.tracks[new_poi].update(x,y)
 
-    def fly_to(self,x,y,yaw_rate=0.0,alt=None):
-        lat, lon = east_north_to_lat_lon.transform(x,y)
-        self.fly_target = (lat,lon,yaw_rate)
+    def fly_to(self,x,y,asl,yaw_rate):
         self.tracks['TARGET'].wipe()
-        self.tracks['TARGET'].update_latlon(lat,lon)
-        if alt:
-            self.alt_marks['TARGET'].update_alt(alt)
+        self.tracks['TARGET'].update(x,y)
+        self.alt_marks['TARGET'].update_alt(asl)
+        lat, lon = east_north_to_lat_lon.transform(x,y)
+        self.mav.set_target(lat,lon,asl,yaw_rate)
 
-    def get_target_drone_name(self):
-        return [tn for tn in self.tracks.keys() if tn.startswith('DRONE')][0]
-
-    def get_target_drone_num(self):
-        drone_name = self.get_target_drone_name()
-        return int(drone_name[5:])
+    def hover(self):
+        x,y = self.tracks['DRONE'].get_current_pos()
+        self.tracks['TARGET'].wipe()
+        self.tracks['TARGET'].update(x,y)
+        self.mav.hover()
+    
+    def circle(self):
+        x,y = self.tracks['DRONE'].get_current_pos()
+        self.tracks['TARGET'].wipe()
+        self.tracks['TARGET'].update(x,y)
+        self.mav.circle()
 
     def cancel_fly_to(self):
-        self.fly_target = None
         self.tracks['TARGET'].wipe()
-
-    def brake(self):
-        pos = self.tracks[self.get_target_drone_name()].get_current_pos()
-        if pos:
-            self.fly_to(pos[0], pos[1], 0.0)
-
-    def circle(self):
-        pos = self.tracks[self.get_target_drone_name()].get_current_pos()
-        if pos:
-            self.fly_to(pos[0], pos[1], 0.25)
-
-    def send_fly_target(self):
-        if self.fly_target:
-            # hack to get the target ID
-            
-            self.mav.mav.set_position_target_global_int_send(
-                0,  # timestamp
-                self.get_target_drone_num(),  # target system_id
-                1,  # target component id
-                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE,
-                int(self.fly_target[0] * 1.0e7),  # lat
-                int(self.fly_target[1] * 1.0e7),  # lon
-                self.alt_marks['TARGET'].alt - self.alt_marks[drone_name+'_TAKEOFF'].alt,  # alt, ASL target converted relative to takeoff 
-                0,  # vx
-                0,  # vy
-                0,  # vz
-                0,  # afx
-                0,  # afy
-                0,  # afz
-                0,  # yaw
-                self.fly_target[2],  # yawrate
-            )
-
+        self.mav.clear_target()
+    
     def alt_click_handler(self,e):
         self.alt_marks['TARGET'].update_alt(e.ydata)
         self.alt_tape.draw()
@@ -326,10 +366,10 @@ class TrackerApp:
         elif self.click_mode=='POI':
             self.add_poi(e.xdata, e.ydata)
         elif self.click_mode=='FLY':
-            self.fly_to(e.xdata,e.ydata)
+            self.fly_to(e.xdata,e.ydata,self.alt_marks['TARGET'].alt, 0.0)
             self.set_click_mode('NAV')
         self.tracker_map.draw()
-    
+
     def hover_handler(self, e):
         if e.xdata:
             lat, lon = east_north_to_lat_lon.transform(e.xdata, e.ydata)
@@ -342,19 +382,6 @@ class TrackerApp:
             self.status_msgs.set(f'Cursor {lat:.6f},{lon:.6f},{terrain_alt:.1f}m ASL' + "\n" + dist_msg)
         else:
             self.status_msgs.set('Cursor off map')
-
-    def setup_mav(self, mav_connect_str):
-        if mav_connect_str:
-            print(f'Connecting to {mav_connect_str}')
-            try:
-                mav_connection = mavutil.mavlink_connection(mav_connect_str)
-                print(f'Connected to {mav_connect_str}')
-            except ConnectionError:
-                print(f'Failed to connect to {mav_connect_str}')
-                mav_connection = None
-        else:
-            mav_connection = None
-        return mav_connection
 
     def process_chat(self):
         if self.chat_url:
@@ -379,60 +406,59 @@ class TrackerApp:
                         self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
 
 
-    def process_mavlink(self):
-        if self.mav:
-            msg = self.mav.recv_match(type=['HEARTBEAT',
-                                            'GLOBAL_POSITION_INT'
-                                            ], blocking=False)
-            if msg:
-                drone_num = msg.get_srcSystem()
-                drone_name = f'DRONE{drone_num}'
-                sensor_name = f'SENSOR{drone_num}'
-                if drone_name in self.tracks.keys():
-                    # seen this drone before
-                    if msg.get_type()=='GLOBAL_POSITION_INT':
-                        self.tracks[drone_name].update_latlon(msg.lat/1e7,msg.lon/1e7)
-                        terrain_under_drone = self.terrain.lookup(self.tracks[drone_name].location()[0],
-                                                                  self.tracks[drone_name].location()[1])
-                        if msg.relative_alt<10:
-                            # must be takeoff - BAD ASSUMPTION
-                            self.tracks[drone_name+'_TAKEOFF'].update_latlon(msg.lat/1e7,msg.lon/1e7)
-                            self.alt_marks[drone_name+'_TAKEOFF'].update_alt(terrain_under_drone)
-                        self.alt_marks[drone_name].update_alt(msg.relative_alt/1e3 + self.alt_marks[drone_name+'_TAKEOFF'].alt)
-                        self.alt_marks[drone_name+'_TERRAIN'].update_alt(terrain_under_drone)
-                        sensor_offset = 1.0*(msg.relative_alt/1.0e3)
-                        drone_x, drone_y = self.tracks[drone_name].get_current_pos()
-                        sensor_x = drone_x + sensor_offset*sin(msg.hdg*1.0e-2*2*pi/360.0)
-                        sensor_y = drone_y + sensor_offset*cos(msg.hdg*1.0e-2*2*pi/360.0)
-                        self.tracks[sensor_name].update(sensor_x,sensor_y)
-                else:
-                    # not seen drone before
-                    self.tracks[drone_name] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
-                    self.tracks[drone_name+'_TAKEOFF'] = self.tracker_map.add_track('Drone Takeoff',head_style='bs',track_style='bs')
-                    self.tracks[sensor_name] = self.tracker_map.add_track('Sensor',head_style='go',track_style='g-')
-                    self.tracks[sensor_name].track_line.set_lw(10)
-                    self.tracks[sensor_name].track_line.set_c((0.,1.,0.,0.5))
-                    self.alt_marks[drone_name] = self.alt_tape.add_marker(line_style=None, marker_style='bx')
-                    self.alt_marks[drone_name+'_TAKEOFF'] = self.alt_tape.add_marker(line_style=None, marker_style='bs')
-                    self.alt_marks[drone_name+'_TERRAIN'] = self.alt_tape.add_marker(line_style='g-', marker_style=None)
-                    # request data
-                    self.mav.mav.request_data_stream_send(msg.get_srcSystem(),
-                                                        msg.get_srcComponent(),
-                                                        mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
+    def drone_update(self):
+        if self.mav.connected:
+            self.mav.process_mavlink()
+
+    def draw_drone(self):
+        if self.mav.current_pos:
+            lat, lon, rel_alt = self.mav.current_pos
+            self.tracks['DRONE'].update_latlon(lat,lon)
+            drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
+            terrain_under_drone = self.terrain.lookup(drone_x, drone_y)
+            self.alt_marks['TERRAIN'].update_alt(terrain_under_drone)
+            if self.alt_marks['TAKEOFF'].alt:
+                # I know take off location - can compute ASL
+                alt_asl = rel_alt + self.alt_marks['TAKEOFF'].alt
+                self.alt_marks['DRONE'].update_alt(alt_asl)
+                # plot the sensor footprint
+                sensor_offset = 1.0*(alt_asl - terrain_under_drone)
+                sensor_x = drone_x + sensor_offset*sin(self.mav.current_hdg_deg*deg_to_rad)
+                sensor_y = drone_y + sensor_offset*cos(self.mav.current_hdg_deg*deg_to_rad)
+                self.tracks['SENSOR'].update(sensor_x,sensor_y)
+            else:
+                # no record of takeoff - so try for its location
+                if self.mav.takeoff_pos:
+                    to_lat, to_lon, _ = self.mav.takeoff_pos
+                    self.tracks['TAKEOFF'].wipe()         
+                    self.tracks['TAKEOFF'].update_latlon(to_lat,to_lon)
+                    takeoff_x, takeoff_y = self.tracks['TAKEOFF'].get_current_pos()
+                    terrain_under_takeoff = self.terrain.lookup(takeoff_x, takeoff_y)
+                    self.alt_marks['TAKEOFF'].update_alt(terrain_under_takeoff)
+                    self.time_markers['TAKEOFF'].update_time(self.mav.takeoff_time)
+                    self.time_markers['ENDURANCE'].update_time(self.mav.takeoff_time+self.mav.endurance())
+        battery_estimate = self.mav.battery_estimate()
+        if battery_estimate:
+            self.time_markers['BATTERY'].update_time(battery_estimate)
+
 
     def fast_loop(self):
-        self.process_mavlink()
+        self.drone_update()
         self.root.after(1, self.fast_loop)
 
     def slow_loop(self):
         # process chat
         self.process_chat()
+        # process drone
+        self.draw_drone()
         # redraw the canvas every second
         self.tracker_map.draw()
         self.alt_tape.draw()
+        self.time_markers['NOW'].update_time(time.time())
+        self.time_tape.draw_now()
         # update target if there is one
-        if self.mav:
-            self.send_fly_target()
+        if self.mav.connected:
+            self.mav.send_target()
         self.root.after(500, self.slow_loop)
 
     def run(self):
