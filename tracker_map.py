@@ -374,16 +374,19 @@ class TrackerApp:
             self.set_click_mode('NAV')
         self.tracker_map.draw()
 
+    def update_distances(self,cursor_pos):
+        self.dist_box.delete(0,self.dist_box.size())
+        for t in self.tracks:
+            pos = self.tracks[t].get_current_pos()
+            if pos:
+                self.dist_box.insert(tkinter.END,f'{t}: {distance(pos,cursor_pos):.0f}m; ')
+
     def hover_handler(self, e):
         if e.xdata:
             lat, lon = east_north_to_lat_lon.transform(e.xdata, e.ydata)
             terrain_alt = self.terrain.lookup(e.xdata, e.ydata)
-            self.dist_box.delete(0,self.dist_box.size())
-            for t in self.tracks:
-                pos = self.tracks[t].get_current_pos()
-                if pos:
-                    self.dist_box.insert(tkinter.END,f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; ')
             self.status_msgs.set(f'{lat:.6f},\n{lon:.6f},\n{terrain_alt:.1f}m ASL')
+            self.update_distances((e.xdata, e.ydata))
         else:
             self.status_msgs.set('Cursor off map')
 
