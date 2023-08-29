@@ -32,14 +32,6 @@ class DroneInterface:
     def clear_target(self):
         self.drone_target = None
 
-    def hover(self, yaw_rate=0.0):
-        if self.current_pos:
-            lat, lon, rel_alt = self.current_pos
-            self.set_target(lat, lon, rel_alt, yaw_rate)
-
-    def circle(self):
-        self.hover(0.25)
-
     def send_target(self):
         if self.drone_target:
             self.mav_connection.mav.set_position_target_global_int_send(

@@ -155,8 +155,8 @@ class TimeMarker:
         self.time_secs = time_secs
         self.plot()
 
-    def update_now(self):
-        self.update_time(time.time())
+    def update_now(self, offset=0.0):
+        self.update_time(time.time()+offset)
         self.plot()
 
 class TimeTape(FigureCanvasTkAgg):
@@ -287,9 +287,9 @@ class TrackerApp:
         self.track_toolbar.grid(row=0,column=1)
         self.nav_toolbar.grid(row=1,column=1)
         self.tracker_map.get_tk_widget().grid(row=2,column=1)
-        status_label.grid(row=3,column=1)
-        self.time_tape.get_tk_widget().grid(row=4,column=1)
+        self.time_tape.get_tk_widget().grid(row=3,column=1)
         # assemble the right pane
+        status_label.grid(row=0,column=2)
         self.chat_box.grid(row=2,column=2)
         # connect to the MAV
         self.mav = DroneInterface(mav_connect_str)
@@ -334,23 +334,22 @@ class TrackerApp:
         self.tracks[new_poi].update(x,y)
 
     def fly_to(self,x,y,asl,yaw_rate):
-        self.tracks['TARGET'].wipe()
-        self.tracks['TARGET'].update(x,y)
-        self.alt_marks['TARGET'].update_alt(asl)
-        lat, lon = east_north_to_lat_lon.transform(x,y)
-        self.mav.set_target(lat,lon,asl,yaw_rate)
+        # can only command if know takeoff altitude
+        if self.alt_marks['TAKEOFF']:
+            self.tracks['TARGET'].wipe()
+            self.tracks['TARGET'].update(x,y)
+            self.alt_marks['TARGET'].update_alt(asl)
+            lat, lon = east_north_to_lat_lon.transform(x,y)
+            rel_alt = asl - self.alt_marks['TAKEOFF'].alt
+            self.mav.set_target(lat,lon,rel_alt,yaw_rate)
 
-    def hover(self):
+    def hover(self, yaw_rate=0.0):
         x,y = self.tracks['DRONE'].get_current_pos()
-        self.tracks['TARGET'].wipe()
-        self.tracks['TARGET'].update(x,y)
-        self.mav.hover()
+        asl = self.alt_tracks['DRONE'].alt
+        self.fly_to(x,y,asl,yaw_rate)
     
-    def circle(self):
-        x,y = self.tracks['DRONE'].get_current_pos()
-        self.tracks['TARGET'].wipe()
-        self.tracks['TARGET'].update(x,y)
-        self.mav.circle()
+    def circle(self, yaw_rate=0.25):
+        self.hover(yaw_rate=yaw_rate)
 
     def cancel_fly_to(self):
         self.tracks['TARGET'].wipe()
@@ -426,6 +425,12 @@ class TrackerApp:
                 sensor_x = drone_x + sensor_offset*sin(self.mav.current_hdg_deg*deg_to_rad)
                 sensor_y = drone_y + sensor_offset*cos(self.mav.current_hdg_deg*deg_to_rad)
                 self.tracks['SENSOR'].update(sensor_x,sensor_y)
+                # plot turnback time
+                dist_home = distance((drone_x,drone_y),
+                                     self.tracks['TAKEOFF'].get_current_pos())
+                time_home = dist_home/self.mav.speed()
+                turnback_time = self.mav.takeoff_time+self.mav.endurance()-time_home
+                self.time_markers['TURNBACK'].update_time(turnback_time)
             else:
                 # no record of takeoff - so try for its location
                 if self.mav.takeoff_pos:
@@ -435,6 +440,7 @@ class TrackerApp:
                     takeoff_x, takeoff_y = self.tracks['TAKEOFF'].get_current_pos()
                     terrain_under_takeoff = self.terrain.lookup(takeoff_x, takeoff_y)
                     self.alt_marks['TAKEOFF'].update_alt(terrain_under_takeoff)
+                    self.alt_marks['TARGET'].update_alt(terrain_under_takeoff + 20.0)
                     self.time_markers['TAKEOFF'].update_time(self.mav.takeoff_time)
                     self.time_markers['ENDURANCE'].update_time(self.mav.takeoff_time+self.mav.endurance())
         battery_estimate = self.mav.battery_estimate()
