@@ -1,7 +1,7 @@
 import time
 from pymavlink import mavutil
-from sklearn.linear_model import LinearRegression
-import numpy as np
+#from sklearn.linear_model import LinearRegression
+#import numpy as np
 
 class DroneInterface:
 
@@ -91,7 +91,7 @@ class DroneInterface:
             elif msg_type=='HEARTBEAT':
                 if msg.system_status==4:
                     if 'HEARTBEAT' not in self.last_msg_dict:
-                        print(f'Warning - drone already in the air on connection')
+                        print('Warning - drone already in the air on connection')
                         self.takeoff_pos = self.current_pos
                         self.takeoff_time = time.time()
                     elif self.last_status()!=4:

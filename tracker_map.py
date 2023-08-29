@@ -5,7 +5,6 @@ from rasterio.plot import show
 
 import tkinter
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-import matplotlib.dates as mdates
 from matplotlib.figure import Figure
 
 import functools
@@ -344,7 +343,7 @@ class TrackerApp:
 
     def hover(self, yaw_rate=0.0):
         x,y = self.tracks['DRONE'].get_current_pos()
-        asl = self.alt_tracks['DRONE'].alt
+        asl = self.alt_marks['DRONE'].alt
         self.fly_to(x,y,asl,yaw_rate)
     
     def circle(self, yaw_rate=0.25):
