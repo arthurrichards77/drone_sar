@@ -237,6 +237,7 @@ def distance(p1,p2):
 class TrackerApp:
 
     def __init__(self, tile_file_name, mav_connect_str, chat_url, terrain_path):
+        print('Starting...')
         self.root = tkinter.Tk()
         self.timer_count = 0
         self.root.wm_title("Tracker Map")
@@ -264,9 +265,6 @@ class TrackerApp:
         self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
-        # chat window
-        self.chat_box = tkinter.Listbox(master=self.root)
-        self.chat_msgs = []
         # altitude tape
         self.alt_tape = AltTape(self.root)
         self.alt_marks = {}
@@ -289,7 +287,16 @@ class TrackerApp:
         self.time_tape.get_tk_widget().grid(row=3,column=1)
         # assemble the right pane
         status_label.grid(row=0,column=2)
-        self.chat_box.grid(row=2,column=2)
+        # chat window
+        self.detail_frame = tkinter.Frame(master=self.root)
+        self.dist_box = tkinter.Listbox(master=self.detail_frame)
+        self.chat_box = tkinter.Listbox(master=self.detail_frame)
+        self.chat_msgs = []
+        tkinter.Label(self.detail_frame, text='Distances').grid(row=0,column=0)
+        self.dist_box.grid(row=1,column=0)
+        tkinter.Label(self.detail_frame, text='Messages').grid(row=2,column=0)
+        self.chat_box.grid(row=3,column=0)
+        self.detail_frame.grid(row=2,column=2)
         # connect to the MAV
         self.mav = DroneInterface(mav_connect_str)
         # add loads of tracking for the drone
@@ -371,12 +378,12 @@ class TrackerApp:
         if e.xdata:
             lat, lon = east_north_to_lat_lon.transform(e.xdata, e.ydata)
             terrain_alt = self.terrain.lookup(e.xdata, e.ydata)
-            dist_msg = 'Distances: '
+            self.dist_box.delete(0,self.dist_box.size())
             for t in self.tracks:
                 pos = self.tracks[t].get_current_pos()
                 if pos:
-                    dist_msg += f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; '
-            self.status_msgs.set(f'Cursor {lat:.6f},{lon:.6f},{terrain_alt:.1f}m ASL' + "\n" + dist_msg)
+                    self.dist_box.insert(tkinter.END,f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; ')
+            self.status_msgs.set(f'{lat:.6f},\n{lon:.6f},\n{terrain_alt:.1f}m ASL')
         else:
             self.status_msgs.set('Cursor off map')
 
