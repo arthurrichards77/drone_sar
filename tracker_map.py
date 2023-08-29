@@ -192,10 +192,14 @@ class TrackerApp:
         # another one for the pilot
         self.tracks['PILOT'] = self.tracker_map.add_track('PILOT', track_type=RingedTrack)
         self.tracks['PILOT'].add_ring(500,'r--')
+        # include built-in toolbar for map zoom and pan etc
+        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
+        self.nav_toolbar.update()
         # click event handler and toolbar work together
-        self.click_mode = 'NAV'
         self.tracker_map.mpl_connect("button_press_event", self.click_handler)
         self.track_toolbar = TrackerToolbar(self.root, self)
+        self.click_mode = None
+        self.set_click_mode('NAV')
         # display coordinates etc
         self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
         status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
@@ -203,9 +207,6 @@ class TrackerApp:
         # chat window
         self.chat_box = tkinter.Listbox(master=self.root)
         self.chat_msgs = []
-        # include built-in toolbar for map zoom and pan etc
-        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
-        self.nav_toolbar.update()
         # altitude tape
         self.alt_tape = AltTape(self.root)
         self.alt_marks = {}
@@ -219,14 +220,14 @@ class TrackerApp:
         self.alt_marks['TARGET'].update_alt(20.0)
         self.alt_tape.mpl_connect("button_press_event", self.alt_click_handler)
         # assemble the left pane
-        self.alt_tape.get_tk_widget().grid(row=1,column=0,padx=10)
+        self.alt_tape.get_tk_widget().grid(row=2,column=0,padx=10)
         # assemble the middle pane
         self.track_toolbar.grid(row=0,column=1)
-        self.tracker_map.get_tk_widget().grid(row=1,column=1)
-        self.nav_toolbar.grid(row=2,column=1)
+        self.nav_toolbar.grid(row=1,column=1)
+        self.tracker_map.get_tk_widget().grid(row=2,column=1)
         status_label.grid(row=3,column=1)
         # assemble the right pane
-        self.chat_box.grid(row=1,column=2)
+        self.chat_box.grid(row=2,column=2)
         # connect to the MAV
         self.mav = self.setup_mav(mav_connect_str)
         self.fly_target = None
@@ -245,11 +246,11 @@ class TrackerApp:
             nav_state = tkinter.DISABLED
         for btn in self.nav_toolbar._buttons:
             self.nav_toolbar._buttons[btn]['state'] = nav_state
-        #for btn in self.track_toolbar.buttons:
-        #    if btn==new_mode:
-        #        self.track_toolbar.buttons[btn]['state'] = tkinter.ACTIVE
-        #    else:
-        #        self.track_toolbar.buttons[btn]['state'] = tkinter.NORMAL
+        for btn in self.track_toolbar.buttons:
+            if btn==new_mode:
+                self.track_toolbar.buttons[btn].configure(bg="LimeGreen")
+            else:
+                self.track_toolbar.buttons[btn].configure(bg="light gray")
 
     def add_poi(self,x,y):
         num_poi = len([t for t in self.tracks if t.startswith('POI')])
@@ -338,10 +339,9 @@ class TrackerApp:
                 pos = self.tracks[t].get_current_pos()
                 if pos:
                     dist_msg += f'{t}: {distance(pos,(e.xdata,e.ydata)):.0f}m; '
-            self.status_msgs.set(f'''Cursor {lat:.6f},{lon:.6f},{terrain_alt:.1f}m ASL  Mode {self.click_mode}
-                                 {dist_msg}''')
+            self.status_msgs.set(f'Cursor {lat:.6f},{lon:.6f},{terrain_alt:.1f}m ASL' + "\n" + dist_msg)
         else:
-            self.status_msgs.set('')
+            self.status_msgs.set('Cursor off map')
 
     def setup_mav(self, mav_connect_str):
         if mav_connect_str:
