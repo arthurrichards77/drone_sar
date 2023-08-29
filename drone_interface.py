@@ -130,10 +130,14 @@ class DroneInterface:
         if 'BATTERY_STATUS' in self.last_msg_dict:
             used_charge  = self.last_msg_dict['BATTERY_STATUS'].current_consumed
             percent_remain = self.last_msg_dict['BATTERY_STATUS'].battery_remaining
+            if percent_remain==100:
+                return None
             percent_used = 100 - percent_remain
             capacity_estimate = used_charge * 100.0/percent_used #in mAh
             #print(f'Estimate battery cap {capacity_estimate}')
             last_current = self.last_msg_dict['BATTERY_STATUS'].current_battery*10.0 #to mA
+            if last_current==0.0:
+                return None
             charge_over_target = capacity_estimate - used_charge - 0.01*target_percent*capacity_estimate
             #print(f'Estimate {charge_over_target}mAh above target')
             time_to_target = charge_over_target/last_current
