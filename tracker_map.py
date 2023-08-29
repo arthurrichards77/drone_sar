@@ -443,9 +443,14 @@ class TrackerApp:
                     self.alt_marks['TARGET'].update_alt(terrain_under_takeoff + 20.0)
                     self.time_markers['TAKEOFF'].update_time(self.mav.takeoff_time)
                     self.time_markers['ENDURANCE'].update_time(self.mav.takeoff_time+self.mav.endurance())
-        battery_estimate = self.mav.battery_estimate()
+        battery_estimate = self.mav.battery_time_remaining()
         if battery_estimate:
-            self.time_markers['BATTERY'].update_time(battery_estimate)
+            if self.time_markers['BATTERY'].time_secs:
+                if time.time() + battery_estimate < self.time_markers['BATTERY'].time_secs:
+                    self.time_markers['BATTERY'].update_now(battery_estimate)
+            else:
+                self.time_markers['BATTERY'].update_now(battery_estimate)
+
 
 
     def fast_loop(self):

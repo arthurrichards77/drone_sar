@@ -24,6 +24,8 @@ class DroneInterface:
         self.current_pos = None
         self.current_hdg_deg = None
         self.battery_history = []
+        self.battery_averages = {'CAPACITY': 3300,
+                                 'CURRENT': 30}
         self.last_msg_dict = {}
 
     def set_target(self,lat,lon,rel_alt,yaw_rate):
@@ -83,6 +85,9 @@ class DroneInterface:
                 self.current_hdg_deg = msg.hdg*1.0e-2
             elif msg_type=='BATTERY_STATUS':
                 self.battery_history.append((time.time(),msg.battery_remaining))
+                self.battery_averages['CURRENT'] += 0.01*(msg.current_battery - self.battery_averages['CURRENT'])
+                capacity_estimate = msg.current_consumed*100.0/(100.0-msg.battery_remaining)
+                self.battery_averages['CAPACITY'] += 0.01*(capacity_estimate - self.battery_averages['CAPACITY'])
             elif msg_type=='HEARTBEAT':
                 if msg.system_status==4:
                     if 'HEARTBEAT' not in self.last_msg_dict:
@@ -114,10 +119,24 @@ class DroneInterface:
         "In m/s"
         return 10
     
-    def battery_estimate(self, target_level=30):
-        if len(self.battery_history)<10:
+    def battery_time_remaining(self, target_percent=30):
+        "Time to capacity target in seconds"
+        #if len(self.battery_history)<10:
+        #    return None
+        #model = LinearRegression()
+        #model.fit(np.array([b[1] for b in self.battery_history]).reshape((-1,1)),
+        #          np.array([b[0] for b in self.battery_history]).reshape((-1,1)))
+        #return model.predict(np.array([target_level]).reshape((1,-1)))
+        if 'BATTERY_STATUS' in self.last_msg_dict:
+            used_charge  = self.last_msg_dict['BATTERY_STATUS'].current_consumed
+            percent_remain = self.last_msg_dict['BATTERY_STATUS'].battery_remaining
+            percent_used = 100 - percent_remain
+            capacity_estimate = used_charge * 100.0/percent_used #in mAh
+            print(f'Estimate battery cap {capacity_estimate}')
+            last_current = self.last_msg_dict['BATTERY_STATUS'].current_battery*10.0 #to mA
+            charge_over_target = capacity_estimate - used_charge - 0.01*target_percent*capacity_estimate
+            print(f'Estimate {charge_over_target}mAh above target')
+            time_to_target = charge_over_target/last_current
+            return time_to_target*3600.0 #to seconds
+        else:
             return None
-        model = LinearRegression()
-        model.fit(np.array([b[1] for b in self.battery_history]).reshape((-1,1)),
-                  np.array([b[0] for b in self.battery_history]).reshape((-1,1)))
-        return model.predict(np.array([target_level]).reshape((1,-1)))
