@@ -15,12 +15,9 @@ import argparse
 
 from math import sqrt, cos, sin, pi
 
-import requests
-import json
-import warnings
-
 from terrain import TerrainTileCollection
 from drone_interface import DroneInterface
+from chat_client import ChatClient
 
 crs_osgb = pyproj.CRS.from_epsg(27700)
 crs_gps = pyproj.CRS.from_epsg(4326)
@@ -290,8 +287,7 @@ class TrackerApp:
         # chat window
         self.detail_frame = tkinter.Frame(master=self.root)
         self.dist_box = tkinter.Listbox(master=self.detail_frame)
-        self.chat_box = tkinter.Listbox(master=self.detail_frame)
-        self.chat_msgs = []
+        self.chat_box = tkinter.Listbox(master=self.detail_frame,width=50)
         tkinter.Label(self.detail_frame, text='Distances').grid(row=0,column=0)
         self.dist_box.grid(row=1,column=0)
         tkinter.Label(self.detail_frame, text='Messages').grid(row=2,column=0)
@@ -312,7 +308,9 @@ class TrackerApp:
         self.alt_marks['TERRAIN'] = self.alt_tape.add_marker(line_style='g-', marker_style=None)
         self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
         # connect to chat server
-        self.chat_url = chat_url
+        self.chat_client = None
+        if chat_url:
+            self.chat_client = ChatClient(chat_url)
         # load terrain
         self.terrain = TerrainTileCollection(terrain_path)
 
@@ -391,27 +389,17 @@ class TrackerApp:
             self.status_msgs.set('Cursor off map')
 
     def process_chat(self):
-        if self.chat_url:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                chat_inbox_req = requests.get(self.chat_url, verify=False, timeout=1.0)
-            chat_inbox = json.loads(chat_inbox_req.content)
-            for chat_item in chat_inbox:
-                chat_name = chat_item['name']
-                chat_msg = chat_item['msg']
-                chat_summary = f'{chat_name}: {chat_msg}'
-                self.chat_msgs.append(chat_summary)
-                self.chat_box.insert(len(self.chat_msgs),chat_summary)
-                if chat_item['lat']:
-                    if chat_name.upper()=='PILOT':
-                        self.tracks['PILOT'].wipe()
-                        self.tracks['PILOT'].update_latlon(chat_item['lat'], chat_item['lon'])
-                    elif chat_name in self.tracks.keys():
-                        self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
-                    else:
-                        self.tracks[chat_name] = self.tracker_map.add_track(chat_name, head_style='m^')
-                        self.tracks[chat_name].update_latlon(chat_item['lat'], chat_item['lon'])
-
+        if self.chat_client:
+            messages = self.chat_client.get_new_messages()
+            for msg in messages:
+                chat_summary = f'[{msg.format_time()}] {msg.sender}: {msg.text}'
+                self.chat_box.insert(tkinter.END,chat_summary)
+                self.chat_box.see(tkinter.END)
+                if msg.has_location:
+                    chat_track = msg.sender.upper()
+                    if chat_track not in self.tracks:
+                        self.tracks[chat_track] = self.tracker_map.add_track(chat_track, head_style='m^')
+                    self.tracks[chat_track].update_latlon(msg.lat, msg.lon)
 
     def drone_update(self):
         if self.mav.connected:
