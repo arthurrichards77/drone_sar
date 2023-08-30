@@ -33,7 +33,7 @@ class DroneInterface:
                 0,  # timestamp
                 self.drone_id,  # target system_id
                 1,  # target component id
-                mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
+                mavutil.mavlink.MAV_FRAME_GLOBAL_INT,  # mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
