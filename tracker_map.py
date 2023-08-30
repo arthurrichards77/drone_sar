@@ -1,19 +1,19 @@
 import time
 
-import rasterio
-from rasterio.plot import show
-
 import tkinter
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
-
 import functools
-
-import pyproj
 
 import argparse
 
 from math import sqrt, cos, sin, pi
+
+import pyproj
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.figure import Figure
+
+import rasterio
+from rasterio.plot import show
 
 from terrain import TerrainTileCollection
 from drone_interface import DroneInterface
@@ -272,7 +272,8 @@ class TrackerApp:
         self.time_tape = TimeTape(self.root)
         self.time_markers = {'NOW': self.time_tape.add_marker(line_style='k-',marker_style=None),
                              'TAKEOFF': self.time_tape.add_marker(line_style='b-',marker_style=None),
-                             'TURNBACK': self.time_tape.add_marker(line_style='y-',marker_style='yv'),
+                             'TURNBATT': self.time_tape.add_marker(line_style='y-',marker_style='ys'),
+                             'TURNTIME': self.time_tape.add_marker(line_style='y-',marker_style='yo'),
                              'BATTERY': self.time_tape.add_marker(line_style='r-',marker_style='rs'),
                              'ENDURANCE': self.time_tape.add_marker(line_style='r-',marker_style='ro'),}
         # assemble the left pane
@@ -350,14 +351,14 @@ class TrackerApp:
         x,y = self.tracks['DRONE'].get_current_pos()
         asl = self.alt_marks['DRONE'].alt
         self.fly_to(x,y,asl,yaw_rate)
-    
+
     def circle(self, yaw_rate=0.25):
         self.hover(yaw_rate=yaw_rate)
 
     def cancel_fly_to(self):
         self.tracks['TARGET'].wipe()
         self.mav.clear_target()
-    
+
     def alt_click_handler(self,e):
         self.alt_marks['TARGET'].update_alt(e.ydata)
         self.alt_tape.draw()
@@ -406,41 +407,39 @@ class TrackerApp:
             self.mav.process_mavlink()
 
     def draw_drone(self):
-        if self.mav.current_pos:
-            lat, lon, rel_alt = self.mav.current_pos
+        if self.mav.has_position():
+            lat, lon = self.mav.current_lat_lon()
             self.tracks['DRONE'].update_latlon(lat,lon)
+            alt_asl = self.mav.current_alt_asl()
+            self.alt_marks['DRONE'].update_alt(alt_asl)
+            # look up terrain height at drone location
             drone_x, drone_y = self.tracks['DRONE'].get_current_pos()
             terrain_under_drone = self.terrain.lookup(drone_x, drone_y)
             self.alt_marks['TERRAIN'].update_alt(terrain_under_drone)
             self.alt_marks['MAX'].update_alt(terrain_under_drone+120.0)
-            if self.alt_marks['TAKEOFF'].alt:
-                # I know take off location - can compute ASL
-                alt_asl = rel_alt + self.alt_marks['TAKEOFF'].alt
-                self.alt_marks['DRONE'].update_alt(alt_asl)
-                # plot the sensor footprint
+            # plot the sensor footprint
+            if self.mav.in_air():
                 sensor_offset = 1.0*(alt_asl - terrain_under_drone)
-                sensor_x = drone_x + sensor_offset*sin(self.mav.current_hdg_deg*deg_to_rad)
-                sensor_y = drone_y + sensor_offset*cos(self.mav.current_hdg_deg*deg_to_rad)
+                sensor_x = drone_x + sensor_offset*sin(self.mav.current_hdg_deg()*deg_to_rad)
+                sensor_y = drone_y + sensor_offset*cos(self.mav.current_hdg_deg()*deg_to_rad)
                 self.tracks['SENSOR'].update(sensor_x,sensor_y)
+            # if takeoff time and loc also known
+            if self.mav.takeoff_time:
+                if not self.alt_marks['TAKEOFF'].alt:
+                    self.alt_marks['TAKEOFF'].update_alt(self.mav.takeoff_alt_asl())
+                    self.alt_marks['TARGET'].update_alt(self.mav.takeoff_alt_asl() + 20.0)
+                    to_lat, to_lon = self.mav.takeoff_lat_lon()
+                    self.tracks['TAKEOFF'].update_latlon(to_lat,to_lon)
+                    self.time_markers['TAKEOFF'].update_time(self.mav.takeoff_time)
+                    self.time_markers['ENDURANCE'].update_time(self.mav.takeoff_time+self.mav.endurance())
                 # plot turnback time
                 dist_home = distance((drone_x,drone_y),
                                      self.tracks['TAKEOFF'].get_current_pos())
                 time_home = dist_home/self.mav.speed()
                 turnback_time = self.mav.takeoff_time+self.mav.endurance()-time_home
-                self.time_markers['TURNBACK'].update_time(turnback_time)
-            else:
-                # no record of takeoff - so try for its location
-                if self.mav.takeoff_pos:
-                    to_lat, to_lon, _ = self.mav.takeoff_pos
-                    self.tracks['TAKEOFF'].wipe()         
-                    self.tracks['TAKEOFF'].update_latlon(to_lat,to_lon)
-                    takeoff_x, takeoff_y = self.tracks['TAKEOFF'].get_current_pos()
-                    terrain_under_takeoff = self.terrain.lookup(takeoff_x, takeoff_y)
-                    self.alt_marks['TAKEOFF'].update_alt(terrain_under_takeoff)
-                    self.alt_marks['TARGET'].update_alt(terrain_under_takeoff + 20.0)
-                    self.time_markers['TAKEOFF'].update_time(self.mav.takeoff_time)
-                    self.time_markers['ENDURANCE'].update_time(self.mav.takeoff_time+self.mav.endurance())
-        battery_estimate = self.mav.battery_time_remaining()
+                self.time_markers['TURNTIME'].update_time(turnback_time)
+        # battery estimate is dependent only on current battery message
+        battery_estimate = self.mav.battery_time_remaining(30)
         if battery_estimate:
             if self.time_markers['BATTERY'].time_secs:
                 if time.time() + battery_estimate < self.time_markers['BATTERY'].time_secs:

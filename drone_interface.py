@@ -1,7 +1,5 @@
 import time
 from pymavlink import mavutil
-#from sklearn.linear_model import LinearRegression
-#import numpy as np
 
 class DroneInterface:
 
@@ -19,13 +17,8 @@ class DroneInterface:
                 self.mav_connection = None
         self.drone_id = None
         self.drone_target = None
-        self.takeoff_pos = None
+        self.takeoff_pos_msg = None
         self.takeoff_time = None
-        self.current_pos = None
-        self.current_hdg_deg = None
-        self.battery_history = []
-        self.battery_averages = {'CAPACITY': 3300,
-                                 'CURRENT': 30}
         self.last_msg_dict = {}
 
     def set_target(self,lat,lon,rel_alt,yaw_rate):
@@ -75,37 +68,59 @@ class DroneInterface:
                                                                  mavutil.mavlink.MAV_DATA_STREAM_ALL, 4, 1)
             else:
                 if msg.get_srcSystem() != self.drone_id:
-                    print(f'Ignoring message from system ID {msg.get_srcSystem()}')
+                    #print(f'Ignoring message from system ID {msg.get_srcSystem()}')
                     return
             msg_type = msg.get_type()
             if msg_type=='GLOBAL_POSITION_INT':
-                self.current_pos = (msg.lat/1e7,
-                                    msg.lon/1e7,
-                                    msg.relative_alt/1e3)
-                self.current_hdg_deg = msg.hdg*1.0e-2
+                if self.takeoff_time is None:
+                    if msg.relative_alt > 50.0:
+                        self.takeoff_time = time.time()
+                        self.takeoff_pos_msg = msg
             elif msg_type=='BATTERY_STATUS':
-                self.battery_history.append((time.time(),msg.battery_remaining))
-                self.battery_averages['CURRENT'] += 0.01*(msg.current_battery - self.battery_averages['CURRENT'])
-                capacity_estimate = msg.current_consumed*100.0/(100.0-msg.battery_remaining)
-                self.battery_averages['CAPACITY'] += 0.01*(capacity_estimate - self.battery_averages['CAPACITY'])
+                pass
             elif msg_type=='HEARTBEAT':
-                if msg.system_status==4:
-                    if 'HEARTBEAT' not in self.last_msg_dict:
-                        print('Warning - drone already in the air on connection')
-                        self.takeoff_pos = self.current_pos
-                        self.takeoff_time = time.time()
-                    elif self.last_status()!=4:
-                        # first heartbeat after takeoff
-                        self.takeoff_pos = self.current_pos
-                        self.takeoff_time = time.time()
+                pass
             self.last_msg_dict[msg_type] = msg
+
+    def has_message(self,message_type):
+        return message_type in self.last_msg_dict.keys()
+    
+    def has_position(self):
+        return self.has_message('GLOBAL_POSITION_INT')
+
+    def current_lat_lon(self):
+        "(latitude, longitude) in decimal degrees, or None if unknown"
+        if self.has_message('GLOBAL_POSITION_INT'):
+            return (self.last_msg_dict['GLOBAL_POSITION_INT'].lat/1e7,
+                    self.last_msg_dict['GLOBAL_POSITION_INT'].lon/1e7)
+
+    def current_hdg_deg(self):
+        if self.has_message('GLOBAL_POSITION_INT'):
+            return self.last_msg_dict['GLOBAL_POSITION_INT'].hdg/1e2
+
+    def current_alt_asl(self):
+        "in m, or None if unknown"
+        if self.has_message('GLOBAL_POSITION_INT'):
+            return self.last_msg_dict['GLOBAL_POSITION_INT'].alt/1e3
+
+    def takeoff_lat_lon(self):
+        "(latitude, longitude) in decimal degrees, or None if unknown"
+        if self.takeoff_pos_msg:
+            return (self.takeoff_pos_msg.lat/1e7,
+                    self.takeoff_pos_msg.lon/1e7)
+
+    def takeoff_alt_asl(self):
+        "in m, or None if unknown"
+        if self.takeoff_pos_msg:
+            return self.takeoff_pos_msg.alt/1e3
 
     def time_since_takeoff(self):
         "In seconds"
         return time.time()-self.takeoff_time
 
     def last_status(self):
-        return self.last_msg_dict['HEARTBEAT'].system_status
+        if self.has_message('HEARTBEAT'):
+            return self.last_msg_dict['HEARTBEAT'].system_status
 
     def in_air(self):
         "True if off ground"
@@ -114,19 +129,13 @@ class DroneInterface:
     def endurance(self):
         "In seconds"
         return 1800
-    
+
     def speed(self):
         "In m/s"
         return 10
-    
-    def battery_time_remaining(self, target_percent=30):
+
+    def battery_time_remaining(self, target_percent):
         "Time to capacity target in seconds"
-        #if len(self.battery_history)<10:
-        #    return None
-        #model = LinearRegression()
-        #model.fit(np.array([b[1] for b in self.battery_history]).reshape((-1,1)),
-        #          np.array([b[0] for b in self.battery_history]).reshape((-1,1)))
-        #return model.predict(np.array([target_level]).reshape((1,-1)))
         if 'BATTERY_STATUS' in self.last_msg_dict:
             used_charge  = self.last_msg_dict['BATTERY_STATUS'].current_consumed
             percent_remain = self.last_msg_dict['BATTERY_STATUS'].battery_remaining
