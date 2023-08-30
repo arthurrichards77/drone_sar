@@ -21,8 +21,8 @@ class DroneInterface:
         self.takeoff_time = None
         self.last_msg_dict = {}
 
-    def set_target(self,lat,lon,rel_alt,yaw_rate):
-        self.drone_target = (lat, lon, rel_alt, yaw_rate)
+    def set_target(self,lat,lon,asl,yaw_rate):
+        self.drone_target = (lat, lon, asl, yaw_rate)
 
     def clear_target(self):
         self.drone_target = None

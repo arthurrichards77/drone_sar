@@ -344,8 +344,7 @@ class TrackerApp:
             self.tracks['TARGET'].update(x,y)
             self.alt_marks['TARGET'].update_alt(asl)
             lat, lon = east_north_to_lat_lon.transform(x,y)
-            rel_alt = asl - self.alt_marks['TAKEOFF'].alt
-            self.mav.set_target(lat,lon,rel_alt,yaw_rate)
+            self.mav.set_target(lat,lon,asl,yaw_rate)
 
     def hover(self, yaw_rate=0.0):
         x,y = self.tracks['DRONE'].get_current_pos()
