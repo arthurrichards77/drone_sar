@@ -235,11 +235,27 @@ class TrackerApp:
 
     def __init__(self, tile_file_name, mav_connect_str, chat_url, terrain_path):
         print('Starting...')
+        # make the app
         self.root = tkinter.Tk()
-        self.timer_count = 0
         self.root.wm_title("Tracker Map")
-        self.tracker_map = TkTrackerMap(self.root, tile_file_name)
+        # make the major GUI elements
+        self.topbar = tkinter.Frame(self.root)
+        self.topbar.pack(side=tkinter.TOP)
+        self.midbar = tkinter.Frame(self.root,bg='green')
+        self.midbar.pack(side=tkinter.TOP,fill=tkinter.BOTH,expand=True)
+        self.btmbar = tkinter.Frame(self.root)
+        self.btmbar.pack(side=tkinter.BOTTOM,fill=tkinter.X,expand=True)
+        # the primary map
+        self.tracker_map = TkTrackerMap(self.midbar, tile_file_name)
         self.tracks = {}
+        # include built-in toolbar for map zoom and pan etc
+        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.topbar, pack_toolbar=False)
+        self.nav_toolbar.update()
+        # click event handler and toolbar work together
+        self.track_toolbar = TrackerToolbar(self.topbar, self)
+        self.click_mode = None
+        self.set_click_mode('NAV')
+        self.tracker_map.mpl_connect("button_press_event", self.click_handler)
         # special high level track for MISPER
         self.tracks['MISPER'] = self.tracker_map.add_track('MISPER', track_type=RingedTrack)
         self.tracks['MISPER'].add_ring(350,'g-')
@@ -250,25 +266,17 @@ class TrackerApp:
         # another one for the pilot
         self.tracks['PILOT'] = self.tracker_map.add_track('PILOT', track_type=RingedTrack)
         self.tracks['PILOT'].add_ring(500,'r--')
-        # include built-in toolbar for map zoom and pan etc
-        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.root, pack_toolbar=False)
-        self.nav_toolbar.update()
-        # click event handler and toolbar work together
-        self.tracker_map.mpl_connect("button_press_event", self.click_handler)
-        self.track_toolbar = TrackerToolbar(self.root, self)
-        self.click_mode = None
-        self.set_click_mode('NAV')
         # display coordinates etc
-        self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
+        self.status_msgs = tkinter.StringVar(master=self.topbar, value='Status')
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
         # altitude tape
-        self.alt_tape = AltTape(self.root)
+        self.alt_tape = AltTape(self.midbar)
         self.alt_marks = {}
         self.alt_marks['SEA_LEVEL'] = self.alt_tape.add_marker('b-',None)
         self.alt_marks['SEA_LEVEL'].update_alt(0.0)
         self.alt_tape.mpl_connect("button_press_event", self.alt_click_handler)
         # timeline
-        self.time_tape = TimeTape(self.root)
+        self.time_tape = TimeTape(self.btmbar)
         self.time_markers = {'NOW': self.time_tape.add_marker(line_style='k-',marker_style=None),
                              'TAKEOFF': self.time_tape.add_marker(line_style='b-',marker_style=None),
                              'TURNBATT': self.time_tape.add_marker(line_style='y-',marker_style='ys'),
@@ -295,28 +303,24 @@ class TrackerApp:
             self.chat_client = ChatClient(chat_url)
         # load terrain
         self.terrain = TerrainTileCollection(terrain_path)
-        self.assemble_gui()
-
-    def assemble_gui(self):
-        # assemble the left pane
-        self.alt_tape.get_tk_widget().grid(row=2,column=0)
-        # assemble the middle pane
-        self.track_toolbar.grid(row=0,column=1)
-        self.nav_toolbar.grid(row=1,column=1)
-        self.tracker_map.get_tk_widget().grid(row=2,column=1)
-        self.time_tape.get_tk_widget().grid(row=3,column=1)
-        # assemble the right pane
-        status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
-        status_label.grid(row=0,column=2)
-        # chat window
-        self.detail_frame = tkinter.Frame(master=self.root)
+        # assemble GUI
+        self.nav_toolbar.pack(side=tkinter.LEFT)
+        self.track_toolbar.pack(side=tkinter.LEFT)
+        status_label = tkinter.Label(master=self.topbar, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
+        status_label.pack(side=tkinter.RIGHT)
+        self.alt_tape.get_tk_widget().pack(side=tkinter.LEFT,fill=tkinter.Y)
+        self.tracker_map.get_tk_widget().pack(side=tkinter.LEFT,fill=tkinter.BOTH,expand=True)
+        # chat window etc on the right
+        self.detail_frame = tkinter.Frame(master=self.midbar)
         self.dist_box = tkinter.Listbox(master=self.detail_frame)
         self.chat_box = tkinter.Listbox(master=self.detail_frame,width=50)
-        tkinter.Label(self.detail_frame, text='Distances').grid(row=0,column=0)
-        self.dist_box.grid(row=1,column=0)
-        tkinter.Label(self.detail_frame, text='Messages').grid(row=2,column=0)
-        self.chat_box.grid(row=3,column=0)
-        self.detail_frame.grid(row=2,column=2)
+        tkinter.Label(self.detail_frame, text='Distances').pack(side=tkinter.TOP)
+        self.dist_box.pack(side=tkinter.TOP,fill=tkinter.Y)
+        tkinter.Label(self.detail_frame, text='Messages').pack(side=tkinter.TOP)
+        self.chat_box.pack(side=tkinter.TOP,fill=tkinter.Y)
+        self.detail_frame.pack(side=tkinter.RIGHT,fill=tkinter.Y)
+        self.time_tape.get_tk_widget().pack(side=tkinter.BOTTOM,fill=tkinter.X,expand=True)
+        
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
