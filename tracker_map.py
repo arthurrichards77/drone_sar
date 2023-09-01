@@ -82,6 +82,46 @@ class RingedTrack(MapTrack):
                 ring_y = [ctr_y + self.radii[ii]*sin(a) for a in angles]
                 self.ring_lines[ii].set_data(ring_x, ring_y)
 
+class TkTrackerMap(FigureCanvasTkAgg):
+
+    def __init__(self, master, tile_file_name):
+        fig = Figure(figsize=(5, 5), dpi=100)
+        super().__init__(fig,master=master)
+        self.ax = fig.add_subplot()
+        base_map = rasterio.open(tile_file_name)
+        show(base_map, ax=self.ax)
+        self.tile_limits = self.ax.axis()
+        fig.tight_layout()
+
+    def add_track(self,name, track_style='-', head_style='x', track_type=MapTrack):
+        new_track = track_type(name, self, track_style, head_style)
+        return new_track
+    
+class TrackerToolbar(tkinter.Frame):
+
+    def __init__(self, master, parent_app):
+        super().__init__(master=master)
+        self.parent_app = parent_app
+        self.buttons = {}
+        mode_button_list = ['NAV','MISPER','POI','FLY']
+        for (ii,txt) in enumerate(mode_button_list):
+            self.buttons[txt] = tkinter.Button(master=self,
+                                               text=txt,
+                                               command=functools.partial(parent_app.set_click_mode, new_mode=txt))
+            self.buttons[txt].grid(row=0,column=ii)
+        self.buttons['HOV'] = tkinter.Button(master=self,
+                                             text='HOV',
+                                             command=parent_app.hover)
+        self.buttons['HOV'].grid(row=0,column=4)
+        self.buttons['CIR'] = tkinter.Button(master=self,
+                                             text='CIR',
+                                             command=parent_app.circle)
+        self.buttons['CIR'].grid(row=0,column=5)
+        self.buttons['CAN'] = tkinter.Button(master=self,
+                                             text='CAN',
+                                             command=parent_app.cancel_fly_to)
+        self.buttons['CAN'].grid(row=0,column=6)
+
 class AltMarker:
 
     def __init__(self, parent_tape, line_style='-', marker_style='o'):
@@ -113,7 +153,7 @@ class AltMarker:
 class AltTape(FigureCanvasTkAgg):
 
     def __init__(self, master):
-        fig = Figure(figsize=(1.5, 5), dpi=100)
+        fig = Figure(figsize=(1, 5), dpi=100)
         super().__init__(fig,master=master)
         self.ax = fig.add_subplot()
         self.ax.axis([-0.5,0.5,-50,200])
@@ -158,7 +198,7 @@ class TimeMarker:
 class TimeTape(FigureCanvasTkAgg):
 
     def __init__(self, master):
-        fig = Figure(figsize=(7, 1), dpi=100)
+        fig = Figure(figsize=(5, 1), dpi=100)
         super().__init__(fig,master=master)
         self.ax = fig.add_subplot()
         self.time_range = [-3600,3600]
@@ -185,46 +225,6 @@ class TimeTape(FigureCanvasTkAgg):
                       self.time_range[1]+time_now,
                       -0.5,0.5])
         self.draw()
-
-class TkTrackerMap(FigureCanvasTkAgg):
-
-    def __init__(self, master, tile_file_name):
-        fig = Figure(figsize=(7, 5), dpi=100)
-        super().__init__(fig,master=master)
-        self.ax = fig.add_subplot()
-        base_map = rasterio.open(tile_file_name)
-        show(base_map, ax=self.ax)
-        self.tile_limits = self.ax.axis()
-        fig.tight_layout()
-
-    def add_track(self,name, track_style='-', head_style='x', track_type=MapTrack):
-        new_track = track_type(name, self, track_style, head_style)
-        return new_track
-    
-class TrackerToolbar(tkinter.Frame):
-
-    def __init__(self, master, parent_app):
-        super().__init__(master=master)
-        self.parent_app = parent_app
-        self.buttons = {}
-        mode_button_list = ['NAV','MISPER','POI','FLY']
-        for (ii,txt) in enumerate(mode_button_list):
-            self.buttons[txt] = tkinter.Button(master=self,
-                                               text=txt,
-                                               command=functools.partial(parent_app.set_click_mode, new_mode=txt))
-            self.buttons[txt].grid(row=0,column=ii)
-        self.buttons['HOV'] = tkinter.Button(master=self,
-                                             text='HOV',
-                                             command=parent_app.hover)
-        self.buttons['HOV'].grid(row=0,column=4)
-        self.buttons['CIR'] = tkinter.Button(master=self,
-                                             text='CIR',
-                                             command=parent_app.circle)
-        self.buttons['CIR'].grid(row=0,column=5)
-        self.buttons['CAN'] = tkinter.Button(master=self,
-                                             text='CAN',
-                                             command=parent_app.cancel_fly_to)
-        self.buttons['CAN'].grid(row=0,column=6)
 
 def distance(p1,p2):
     x1,y1 = p1
@@ -476,7 +476,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--tile_file',
                         help='Path to GeoTIFF file for basemap',
-                        default='llanbedr_rgb.tif')
+                        default='map_data/llanbedr_rgb.tif')
     parser.add_argument('-c', '--connect',
                         help='Connection string e.g. tcp:localhost:14550',
                         default=None)

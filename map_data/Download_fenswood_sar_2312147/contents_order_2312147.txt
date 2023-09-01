@@ -1,0 +1,77 @@
+********************************************************************
+
+EDINA DIGIMAP:
+
+DIGITAL DATA SUPPLY
+
+********************************************************************
+
+
+This data is distributed under licence by:
+
+    EDINA
+    University of Edinburgh
+    https://edina.ac.uk
+
+    Tel:    0131 650 3302
+    Fax:    0131 650 3308
+    Email:  digimap@ed.ac.uk
+		
+
+
+---------------------------------------------------------
+
+CONTENTS
+
+You will have received the data files listed below, each product and area has
+its own folder. Note that each data folder contains a conditions.txt file
+which states the conditions for use of the data within. These conditions can
+vary between different data products.
+
+
+
+-------------------------------------------------------------------------------
+Folder:           terrain-5-dtm_5133819
+Extent:           351923.8858415953, 168332.16836302273 - 355855.92972575524, 170640.62452366273
+Date Ordered:     1 September 2023 at 11:55:29
+Product:          OS Terrain 5
+Version:          July 2023
+Format:           ASC
+Theme:            N/A
+Area:             4 tiles
+Tiles:
+ 
+Tile Name:        st56ne
+Extent:           355000.0, 165000.0 - 360000.0, 170000.0
+Last Amended:     6 June 2023
+  
+Tile Name:        st56nw
+Extent:           350000.0, 165000.0 - 355000.0, 170000.0
+Last Amended:     6 June 2023
+  
+Tile Name:        st57se
+Extent:           355000.0, 170000.0 - 360000.0, 175000.0
+Last Amended:     6 June 2023
+  
+Tile Name:        st57sw
+Extent:           350000.0, 170000.0 - 355000.0, 175000.0
+Last Amended:     6 June 2023
+    -------------------------------------------------------------------------------
+Folder:           raster-25k_5133818
+Extent:           351923.8858415953, 168332.16836302273 - 355855.92972575524, 170640.62452366273
+Date Ordered:     1 September 2023 at 11:55:29
+Product:          1:25 000 Scale Colour Raster
+Version:          June 2023
+Format:           TIFF
+Theme:            N/A
+Area:             2 tiles
+Tiles:
+ 
+Tile Name:        st57
+Extent:           350000.0, 170000.0 - 360000.0, 180000.0
+Last Amended:     6 April 2023
+  
+Tile Name:        st56
+Extent:           350000.0, 160000.0 - 360000.0, 170000.0
+Last Amended:     11 February 2022
+     
