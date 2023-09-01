@@ -122,6 +122,16 @@ class TrackerToolbar(tkinter.Frame):
                                              command=parent_app.cancel_fly_to)
         self.buttons['CAN'].grid(row=0,column=6)
 
+class TrackerMapNavToolbar(NavigationToolbar2Tk):
+
+    def __init__(self, master):
+        # NavigationToolbar2Tk(self.tracker_map, self.topbar, pack_toolbar=False)
+        super().__init__(self, master, pack_toolbar=False)
+
+    def mouse_move():
+        # don't want the coordinates here
+        pass
+
 class AltMarker:
 
     def __init__(self, parent_tape, line_style='-', marker_style='o'):
