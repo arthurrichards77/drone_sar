@@ -24,6 +24,9 @@ class DroneInterface:
     def set_target(self,lat,lon,asl,yaw_rate):
         self.drone_target = (lat, lon, asl, yaw_rate)
 
+    def get_target(self):
+        return self.drone_target
+
     def clear_target(self):
         self.drone_target = None
 

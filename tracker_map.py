@@ -310,13 +310,13 @@ class TrackerApp:
         self.mav = DroneInterface(mav_connect_str)
         # add loads of tracking for the drone
         self.tracks['DRONE'] = self.tracker_map.add_track('Drone',head_style='bx',track_style='b-')
-        self.tracks['TARGET'] = self.tracker_map.add_track('TARGET', track_style='', head_style='bs')
+        self.tracks['TARGET'] = self.tracker_map.add_track('TARGET', track_style='', head_style='bd')
         self.tracks['TAKEOFF'] = self.tracker_map.add_track('Takeoff',head_style='bs',track_style='bs')
         self.tracks['SENSOR'] = self.tracker_map.add_track('Sensor',head_style='go',track_style='g-')
         self.tracks['SENSOR'].track_line.set_lw(10)
         self.tracks['SENSOR'].track_line.set_c((0.,1.,0.,0.5))
         self.alt_marks['DRONE'] = self.alt_tape.add_marker(line_style=None, marker_style='bx')
-        self.alt_marks['TARGET'] = self.alt_tape.add_marker('b--',None)
+        self.alt_marks['TARGET'] = self.alt_tape.add_marker('b--d',None)
         self.alt_marks['TAKEOFF'] = self.alt_tape.add_marker(line_style=None, marker_style='bs')
         self.alt_marks['TERRAIN'] = self.alt_tape.add_marker(line_style='g-', marker_style=None)
         self.alt_marks['MAX'] = self.alt_tape.add_marker('r-',None)
@@ -366,13 +366,11 @@ class TrackerApp:
         self.tracks[new_poi].update(x,y)
 
     def fly_to(self,x,y,asl,yaw_rate):
-        # can only command if know takeoff altitude
-        if self.alt_marks['TAKEOFF']:
-            self.tracks['TARGET'].wipe()
-            self.tracks['TARGET'].update(x,y)
-            self.alt_marks['TARGET'].update_alt(asl)
-            lat, lon = east_north_to_lat_lon.transform(x,y)
-            self.mav.set_target(lat,lon,asl,yaw_rate)
+        self.tracks['TARGET'].wipe()
+        self.tracks['TARGET'].update(x,y)
+        self.alt_marks['TARGET'].update_alt(asl)
+        lat, lon = east_north_to_lat_lon.transform(x,y)
+        self.mav.set_target(lat,lon,asl,yaw_rate)
 
     def hover(self, yaw_rate=0.0):
         x,y = self.tracks['DRONE'].get_current_pos()
@@ -389,6 +387,12 @@ class TrackerApp:
     def alt_click_handler(self,e):
         self.alt_marks['TARGET'].update_alt(e.ydata)
         self.alt_tape.draw()
+        current_target = self.mav.get_target()
+        if current_target:
+            self.mav.set_target(current_target[0],
+                                current_target[1],
+                                e.ydata,
+                                current_target[3])
 
     def click_handler(self,e):
         if self.click_mode=='MISPER':
