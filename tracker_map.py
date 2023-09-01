@@ -178,6 +178,7 @@ class AltTape(FigureCanvasTkAgg):
         super().__init__(fig,master=master)
         self.ax = fig.add_subplot()
         self.ax.axis([-0.5,0.5,-50,200])
+        self.ax.set_xticks([])
         fig.tight_layout()
 
     def add_marker(self, line_style='-', marker_style='o'):
@@ -245,6 +246,7 @@ class TimeTape(FigureCanvasTkAgg):
         self.ax.axis([self.time_range[0]+time_now,
                       self.time_range[1]+time_now,
                       -0.5,0.5])
+        self.ax.set_yticks([])
         self.draw()
 
 def distance(p1,p2):
@@ -264,8 +266,8 @@ class TrackerApp:
         self.topbar.pack(side=tkinter.TOP)
         self.midbar = tkinter.Frame(self.root,bg='green')
         self.midbar.pack(side=tkinter.TOP,fill=tkinter.BOTH,expand=True)
-        self.btmbar = tkinter.Frame(self.root)
-        self.btmbar.pack(side=tkinter.BOTTOM,fill=tkinter.X,expand=True)
+        self.btmbar = tkinter.Frame(self.root,bg='blue')
+        self.btmbar.pack(side=tkinter.BOTTOM,fill=tkinter.X,expand=False)
         # the primary map
         self.tracker_map = TkTrackerMap(self.midbar, tile_file_name)
         self.tracks = {}
