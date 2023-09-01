@@ -124,13 +124,24 @@ class TrackerToolbar(tkinter.Frame):
 
 class TrackerMapNavToolbar(NavigationToolbar2Tk):
 
-    def __init__(self, master):
+    def __init__(self, canvas, master):
         # NavigationToolbar2Tk(self.tracker_map, self.topbar, pack_toolbar=False)
-        super().__init__(self, master, pack_toolbar=False)
+        super().__init__(canvas, master, pack_toolbar=False)
 
-    def mouse_move():
-        # don't want the coordinates here
+    def mouse_move(self, _):
+        # override: don't want the coordinates shown
+        # as it moves the buttons around
         pass
+
+    def set_buttons_state(self,new_state):
+        for btn in self._buttons:
+            self._buttons[btn]['state'] = new_state
+
+    def enable(self):
+        self.set_buttons_state(tkinter.NORMAL)
+
+    def disable(self):
+        self.set_buttons_state(tkinter.DISABLED)
 
 class AltMarker:
 
@@ -259,7 +270,7 @@ class TrackerApp:
         self.tracker_map = TkTrackerMap(self.midbar, tile_file_name)
         self.tracks = {}
         # include built-in toolbar for map zoom and pan etc
-        self.nav_toolbar = NavigationToolbar2Tk(self.tracker_map, self.topbar, pack_toolbar=False)
+        self.nav_toolbar = TrackerMapNavToolbar(self.tracker_map, self.topbar)
         self.nav_toolbar.update()
         # click event handler and toolbar work together
         self.track_toolbar = TrackerToolbar(self.topbar, self)
@@ -316,12 +327,12 @@ class TrackerApp:
         # assemble GUI
         self.nav_toolbar.pack(side=tkinter.LEFT)
         self.track_toolbar.pack(side=tkinter.LEFT)
-        status_label = tkinter.Label(master=self.topbar, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
-        status_label.pack(side=tkinter.RIGHT)
         self.alt_tape.get_tk_widget().pack(side=tkinter.LEFT,fill=tkinter.Y)
         self.tracker_map.get_tk_widget().pack(side=tkinter.LEFT,fill=tkinter.BOTH,expand=True)
         # chat window etc on the right
         self.detail_frame = tkinter.Frame(master=self.midbar)
+        status_label = tkinter.Label(master=self.detail_frame, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
+        status_label.pack(side=tkinter.TOP)
         self.dist_box = tkinter.Listbox(master=self.detail_frame)
         self.chat_box = tkinter.Listbox(master=self.detail_frame,width=50)
         tkinter.Label(self.detail_frame, text='Distances').pack(side=tkinter.TOP)
@@ -336,11 +347,9 @@ class TrackerApp:
         self.click_mode = new_mode
         # disable the plot navigation toolbar unless in NAV
         if new_mode=='NAV':
-            nav_state = tkinter.NORMAL
+            self.nav_toolbar.enable()
         else:
-            nav_state = tkinter.DISABLED
-        for btn in self.nav_toolbar._buttons:
-            self.nav_toolbar._buttons[btn]['state'] = nav_state
+            self.nav_toolbar.disable()
         # make the chosen mode green
         for btn in self.track_toolbar.buttons:
             if btn==new_mode:
