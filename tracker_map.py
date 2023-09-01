@@ -260,7 +260,6 @@ class TrackerApp:
         self.set_click_mode('NAV')
         # display coordinates etc
         self.status_msgs = tkinter.StringVar(master=self.root, value='Status')
-        status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
         self.tracker_map.mpl_connect("motion_notify_event", self.hover_handler)
         # altitude tape
         self.alt_tape = AltTape(self.root)
@@ -276,24 +275,6 @@ class TrackerApp:
                              'TURNTIME': self.time_tape.add_marker(line_style='y-',marker_style='yo'),
                              'BATTERY': self.time_tape.add_marker(line_style='r-',marker_style='rs'),
                              'ENDURANCE': self.time_tape.add_marker(line_style='r-',marker_style='ro'),}
-        # assemble the left pane
-        self.alt_tape.get_tk_widget().grid(row=2,column=0,padx=10)
-        # assemble the middle pane
-        self.track_toolbar.grid(row=0,column=1)
-        self.nav_toolbar.grid(row=1,column=1)
-        self.tracker_map.get_tk_widget().grid(row=2,column=1)
-        self.time_tape.get_tk_widget().grid(row=3,column=1)
-        # assemble the right pane
-        status_label.grid(row=0,column=2)
-        # chat window
-        self.detail_frame = tkinter.Frame(master=self.root)
-        self.dist_box = tkinter.Listbox(master=self.detail_frame)
-        self.chat_box = tkinter.Listbox(master=self.detail_frame,width=50)
-        tkinter.Label(self.detail_frame, text='Distances').grid(row=0,column=0)
-        self.dist_box.grid(row=1,column=0)
-        tkinter.Label(self.detail_frame, text='Messages').grid(row=2,column=0)
-        self.chat_box.grid(row=3,column=0)
-        self.detail_frame.grid(row=2,column=2)
         # connect to the MAV
         self.mav = DroneInterface(mav_connect_str)
         # add loads of tracking for the drone
@@ -314,6 +295,28 @@ class TrackerApp:
             self.chat_client = ChatClient(chat_url)
         # load terrain
         self.terrain = TerrainTileCollection(terrain_path)
+        self.assemble_gui()
+
+    def assemble_gui(self):
+        # assemble the left pane
+        self.alt_tape.get_tk_widget().grid(row=2,column=0)
+        # assemble the middle pane
+        self.track_toolbar.grid(row=0,column=1)
+        self.nav_toolbar.grid(row=1,column=1)
+        self.tracker_map.get_tk_widget().grid(row=2,column=1)
+        self.time_tape.get_tk_widget().grid(row=3,column=1)
+        # assemble the right pane
+        status_label = tkinter.Label(master=self.root, textvariable=self.status_msgs, height=3, justify=tkinter.LEFT)
+        status_label.grid(row=0,column=2)
+        # chat window
+        self.detail_frame = tkinter.Frame(master=self.root)
+        self.dist_box = tkinter.Listbox(master=self.detail_frame)
+        self.chat_box = tkinter.Listbox(master=self.detail_frame,width=50)
+        tkinter.Label(self.detail_frame, text='Distances').grid(row=0,column=0)
+        self.dist_box.grid(row=1,column=0)
+        tkinter.Label(self.detail_frame, text='Messages').grid(row=2,column=0)
+        self.chat_box.grid(row=3,column=0)
+        self.detail_frame.grid(row=2,column=2)
 
     def set_click_mode(self, new_mode):
         self.click_mode = new_mode
