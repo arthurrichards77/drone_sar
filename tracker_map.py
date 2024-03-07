@@ -513,7 +513,7 @@ def main():
                         help='Connection string e.g. tcp:localhost:14550',
                         default=None)
     parser.add_argument('-s','--server',
-                        help='URL for chat server',
+                        help='URL for chat server e.g. https://127.0.0.1:5000',
                         default=None)
     parser.add_argument('-p','--path_to_terrain',
                         help='Path to search for terrain files',
