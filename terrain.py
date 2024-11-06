@@ -15,7 +15,7 @@ class TerrainTile:
         num_rows_read = 0
         with open(filename, 'r', encoding='ascii') as f:
             for line in f:
-                line_bits = [item.strip() for item in line.split(' ')]
+                line_bits = [item.strip() for item in line.strip().split(' ') if item != ''] #this is to remove empty values when reading newer digimap files
                 if line_bits[0]=='nrows':
                     self.nrows = int(line_bits[1])
                     print(f'Tile has {self.nrows} rows')                    
@@ -37,8 +37,9 @@ class TerrainTile:
                         # check we've had all the data we need
                         assert self.ncols is not None
                         # initiailize the array
-                        self.Z = np.zeros((self.nrows,self.ncols))
-                    assert len(line_bits)==self.ncols
+                        self.Z = np.zeros((self.nrows,self.ncols))  
+                    assert len(line_bits)==self.ncols # this line throws errors with digimap ascii files, line 6 defines what the value for no data tiles are -9999 
+                                                        # line 6 must be removed prior to execution and any -9999 values must be replaced
                     self.Z[self.nrows - 1 - num_rows_read] = np.array(line_bits, dtype=float)
                     num_rows_read += 1
         print(f'Read {num_rows_read} rows')
