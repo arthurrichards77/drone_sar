@@ -74,7 +74,7 @@ class TerrainTileCollection:
                     print(f'Loading {full_path}')
                     self.tiles.append(TerrainTile(full_path))
 
-    def plot(self, ax=None, show=True):
+    def plot_tiles(self, ax=None, show=True):
         if ax is None:
             _, ax = plt.subplots(subplot_kw={"projection": "3d"})
         for tile in self.tiles:
@@ -89,18 +89,43 @@ class TerrainTileCollection:
                 #print(f'Tile {ii} has it with height {z}.')
                 break
         return z
+    
+    def to_nparray(self):
+        """
+        x,y,z = tile_collection.to_nparray()
 
+        x and y are 1-D vectors with the grid coordinates
+        z is a 2-D array with the terrain heights
+        """
+        # quick version for now, assuming same spacings
+        all_x = np.unique(np.concatenate([t.x for t in self.tiles]))
+        all_y = np.unique(np.concatenate([t.y for t in self.tiles]))
+        all_z = np.zeros((len(all_y),len(all_x)))
+        for t in self.tiles:
+            x_idx = [x in t.x for x in all_x]
+            y_idx = [y in t.y for y in all_y]
+            all_z[np.ix_(y_idx,x_idx)] = t.Z
+        return all_x, all_y, all_z
+    
+    def plot(self, ax=None):
+        if ax is None:
+            _, ax = plt.subplots(subplot_kw={"projection": "3d"})
+        x,y,z = self.to_nparray()
+        xg,yg = np.meshgrid(x,y)
+        ax.plot_surface(xg, yg, z)
+        plt.show()
 
 if __name__=='__main__':
-    _, ax = plt.subplots(subplot_kw={"projection": "3d"})
     #tile = TerrainTile('map_data/Download_llanbedr_terrain_2297518/terrain-5-dtm_5107396/sh/SH52NE.asc')
     #tile.plot(ax=ax, show=False)
     # now test whole collection of tiles
     tile_cltn = TerrainTileCollection('map_data/Download_llanbedr_terrain_2297518/terrain-5-dtm_5107396')
-    tile_cltn.plot(ax=ax, show=False)
+    tile_cltn.plot()
     x_samp, y_samp = 258000, 322000
     z_samp = tile_cltn.lookup(x_samp,y_samp)
     print(x_samp,y_samp,z_samp)
-    ax.plot([x_samp],[y_samp],[z_samp],marker='*',c='r')
-    plt.show()
+    
+    
+
+
     
