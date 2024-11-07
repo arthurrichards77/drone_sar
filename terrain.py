@@ -12,10 +12,11 @@ class TerrainTile:
         self.yllcorner = None
         self.cellsize = None
         self.Z = None
+        self.nodata=None
         num_rows_read = 0
         with open(filename, 'r', encoding='ascii') as f:
             for line in f:
-                line_bits = [item.strip() for item in line.split(' ')]
+                line_bits = [item.strip() for item in line.strip().split(' ') if item != '']
                 if line_bits[0]=='nrows':
                     self.nrows = int(line_bits[1])
                     print(f'Tile has {self.nrows} rows')                    
@@ -31,6 +32,8 @@ class TerrainTile:
                 elif line_bits[0]=='cellsize':
                     self.cellsize = float(line_bits[1])
                     print(f'Cell size is {self.cellsize}')
+                elif line_bits[0] == 'NODATA_value':
+                    self.nodata=float(line_bits[1])
                 else:
                     # must be height row line
                     if self.Z is None:
@@ -42,6 +45,10 @@ class TerrainTile:
                     self.Z[self.nrows - 1 - num_rows_read] = np.array(line_bits, dtype=float)
                     num_rows_read += 1
         print(f'Read {num_rows_read} rows')
+        for i in range(len(self.Z)):
+            for j in range(self.ncols):
+                if self.Z[i,j]== self.nodata:
+                    self.Z[i,j]=0.0            # Ensure no -9999 values remain in the Z dataset
         assert self.nrows==num_rows_read
         self.x = np.arange(self.xllcorner,
                            self.xllcorner+self.ncols*self.cellsize,
@@ -89,6 +96,38 @@ class TerrainTileCollection:
                 #print(f'Tile {ii} has it with height {z}.')
                 break
         return z
+    def sort(self):
+        sorted_tiles= sorted(self.tiles, key = lambda x: (x.yllcorner, x.xllcorner)) # sort the tile list into geographical order of increasing x and then y (like a screen raster)
+        return sorted_tiles
+
+    def cast2darray(sorted_list):
+        tilearray2d = [[]]
+        buffer = []
+        
+        for j in range(sorted_list[0].nrows): #assuming all tiles in the collection have the same number of rows
+            for tile in sorted_list:
+                for i in range(tile.ncols):
+                    buffer.append(tile.Z[j, i])
+            tilearray2d.append(buffer.copy()) # .copy() has to be here otherwise the appended value is cleared as well
+            buffer.clear()
+
+        tilearray2d.pop(0) #remove the first empty array value
+        return tilearray2d
+
+    def save_as_file(tile2darr):
+        with open("pen y fan 2d array2.txt", "w") as f:
+            for line in tile2darr:
+                f.write(f"{line}\n")
+
+    def read_file(filename): #filename with the .txt extension
+        with open(filename, "r") as f:
+            arr2dtile=[[]]
+            for line in f:
+                line_bits=[float(item.strip("[]")) for item in line.strip().split(',') if item != ''] # remove "[]" from each line and split by ","
+                arr2dtile.append(line_bits.copy())# avoid line reset issues
+
+            arr2dtile.pop(0) # remove the first empty array element
+        return arr2dtile # return 2d list of tile collection data
 
 
 if __name__=='__main__':
